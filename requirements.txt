@@ -1,4 +1,4 @@
-        source venv/bin/activate# Web Framework & API
+# Web Framework & API
 fastapi>=0.104.0
 uvicorn>=0.24.0
 pydantic>=2.0.0
