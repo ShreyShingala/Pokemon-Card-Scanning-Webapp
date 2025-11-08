@@ -6,3 +6,7 @@ __pycache__/
 .vscode/
 .env/
 .env
+.env.local
+pokemon-scanner-next/.env.local
+pokemon-scanner-next/node_modules/
+pokemon-scanner-next/.next/
