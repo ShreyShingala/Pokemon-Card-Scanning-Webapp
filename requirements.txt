@@ -1,0 +1,29 @@
+        source venv/bin/activate# Web Framework & API
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+python-multipart>=0.0.6  # For file uploads
+
+# Database
+supabase>=2.0.0
+python-dotenv>=1.0.0
+
+# Computer Vision & Image Processing
+opencv-python>=4.8.0
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# Object Detection (YOLO)
+ultralytics>=8.0.0  # Includes YOLOv8
+torch>=2.0.0
+torchvision>=0.15.0
+
+# OCR (Optical Character Recognition)
+easyocr>=1.7.0
+pytesseract>=0.3.10  # Backup OCR (if needed)
+
+# Visual Similarity Matching (CLIP)
+faiss-cpu>=1.7.4  # Facebook AI Similarity Search (use faiss-gpu if you have CUDA)
+
+# HTTP & API Calls
+requests>=2.31.0

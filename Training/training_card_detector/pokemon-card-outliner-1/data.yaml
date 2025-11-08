@@ -1,0 +1,9 @@
+# Pokemon Card Detection Dataset
+path: /Users/shrey/Downloads/Coding/Pokemon_Webapp/pokemon-card-outliner-1  # dataset root dir
+train: train  # train images (relative to 'path')
+val: valid  # val images (relative to 'path')
+test: test  # test images (optional)
+
+# Classes
+names:
+  0: pokemon_card

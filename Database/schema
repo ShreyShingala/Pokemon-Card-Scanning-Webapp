@@ -1,0 +1,117 @@
+-- Should I be uploading this to github????
+
+-- users (Bookkeeping table)
+-- Supabase manages authentication via auth.users
+-- This table stores additional user info for bookkeeping
+CREATE TABLE users (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    password_hash TEXT, 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    name TEXT
+    show_on_leaderboard BOOLEAN DEFAULT FALSE
+);
+
+-- Enable Row Level Security
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policy: Users can only view their own data
+CREATE POLICY "Users can view their own data" 
+ON users FOR SELECT 
+USING (auth.uid() = id);
+
+-- Global card data, found on the pokeapi github repo
+CREATE TABLE cards (
+    id TEXT PRIMARY KEY,  -- e.g., "base4-4" (set code-number)
+    name TEXT NOT NULL,
+    supertype TEXT,
+    subtypes TEXT[],
+    level INTEGER,
+    hp INTEGER,
+    types TEXT[],
+    evolves_from TEXT,
+    rarity TEXT,
+    artist TEXT,
+    flavor_text TEXT,
+    retreat_cost TEXT[],
+    converted_retreat_cost INTEGER,
+    set_name TEXT,
+    number TEXT,
+    national_pokedex_numbers INTEGER[],
+    image_small TEXT,
+    image_large TEXT
+);
+
+CREATE TABLE abilities (
+    id SERIAL PRIMARY KEY,
+    card_id TEXT NOT NULL,
+    name TEXT,
+    text TEXT,
+    type TEXT,
+    CONSTRAINT abilities_card_id_fkey FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+);
+
+CREATE TABLE attacks (
+    id SERIAL PRIMARY KEY,
+    card_id TEXT NOT NULL,
+    name TEXT,
+    cost TEXT[],
+    converted_energy_cost INTEGER,
+    damage TEXT,
+    description TEXT,
+    CONSTRAINT attacks_card_id_fkey FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+);
+
+CREATE TABLE weaknesses (
+    id SERIAL PRIMARY KEY,
+    card_id TEXT NOT NULL,
+    type TEXT,
+    value TEXT,
+    CONSTRAINT weaknesses_card_id_fkey FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+);
+
+CREATE TABLE resistances (
+    id SERIAL PRIMARY KEY,
+    card_id TEXT NOT NULL,
+    type TEXT,
+    value TEXT,
+    CONSTRAINT resistances_card_id_fkey FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE
+);
+
+-- User collections
+CREATE TABLE user_cards (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL,
+    card_id TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    acquired_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    source TEXT, -- "scanned", "manually_added"
+    CONSTRAINT user_cards_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
+    CONSTRAINT user_cards_card_id_fkey FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE,
+    UNIQUE(user_id, card_id)
+);
+
+-- Enable Row Level Security
+ALTER TABLE user_cards ENABLE ROW LEVEL SECURITY;
+
+-- Policies (Users can only access their own cards)
+CREATE POLICY "Users can view their own cards" 
+ON user_cards FOR SELECT 
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own cards" 
+ON user_cards FOR INSERT 
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own cards" 
+ON user_cards FOR UPDATE 
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own cards" 
+ON user_cards FOR DELETE 
+USING (auth.uid() = user_id);
+
+-- Indexes
+
+CREATE INDEX IF NOT EXISTS idx_user_cards_user_id ON user_cards(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_cards_card_id ON user_cards(card_id);
