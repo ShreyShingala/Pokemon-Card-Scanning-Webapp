@@ -8,7 +8,7 @@ import numpy as np
 import os
 import json
 import uuid
-from scan_card import getbounding, crop_out_card, get_text_from_image, get_best_matched_clip, initialize_clip_matcher
+from .scan_card import getbounding, crop_out_card, get_text_from_image, get_best_matched_clip, initialize_clip_matcher
 import uvicorn
 from supabase import create_client, Client
 from dotenv import load_dotenv
