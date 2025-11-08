@@ -23,6 +23,7 @@ easyocr>=1.7.0
 pytesseract>=0.3.10  # Backup OCR (if needed)
 
 # Visual Similarity Matching (CLIP)
+git+https://github.com/openai/CLIP.git  # OpenAI CLIP model
 faiss-cpu>=1.7.4  # Facebook AI Similarity Search (use faiss-gpu if you have CUDA)
 
 # HTTP & API Calls
