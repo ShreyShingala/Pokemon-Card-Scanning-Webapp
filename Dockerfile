@@ -1,36 +1,34 @@
+# Hugging Face Spaces Dockerfile for Pokemon Card Scanner API
 FROM python:3.11-slim
 
-# Install only essential system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 \
-    libglib2.0-0 \
-    git \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
+# Set working directory
 WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir \
-    --index-url https://download.pytorch.org/whl/cpu \
-    torch torchvision && \
-    pip install --no-cache-dir -r requirements.txt && \
-    rm -rf ~/.cache/pip
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download CLIP model to bake it into the Docker image
-# This avoids downloading 338MB on every cold start
-# Cache it in /app/.cache/clip to match runtime location
-RUN mkdir -p /app/.cache/clip && \
-    python -c "import clip; print('Downloading CLIP model...'); clip.load('ViT-B/32', device='cpu', download_root='/app/.cache/clip'); print('CLIP model cached successfully')"
+# Copy application code
+COPY . .
 
-# Copy only necessary application files
-COPY Image_detection/ Image_detection/
-COPY detector_models/ detector_models/
-COPY Training/training_card_identifier/ Training/training_card_identifier/
+# Create cache directory for CLIP
+RUN mkdir -p .clip_cache
 
-# Expose port
-EXPOSE 5000
+# Expose port (Hugging Face uses 7860 by default)
+EXPOSE 7860
 
-# Run the application
-CMD uvicorn Image_detection.main:app --host=0.0.0.0 --port=${PORT:-5000}
+# Pre-download CLIP model during build to avoid runtime download
+RUN python -c "import ssl; ssl._create_default_https_context = ssl._create_unverified_context; import clip; import os; os.makedirs('.clip_cache', exist_ok=True); clip.load('ViT-B/32', device='cpu', download_root='.clip_cache'); print('✓ CLIP model cached')"
+
+# Start FastAPI server on port 7860
+CMD ["uvicorn", "Image_detection.main:app", "--host", "0.0.0.0", "--port", "7860"]

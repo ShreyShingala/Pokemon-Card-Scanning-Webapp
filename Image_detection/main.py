@@ -1,8 +1,4 @@
 # ACTUAL API THAT WILL WORK WITH WEBAPP
-import os
-
-os.environ.setdefault('KMP_DUPLICATE_LIB_OK', 'TRUE')
-
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,7 +8,7 @@ import numpy as np
 import os
 import json
 import uuid
-from .scan_card import getbounding, crop_out_card, get_text_from_image, get_best_matched_clip, initialize_clip_matcher
+from scan_card import getbounding, crop_out_card, get_text_from_image, get_best_matched_clip, initialize_clip_matcher
 import uvicorn
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -20,9 +16,6 @@ from datetime import datetime
 import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import traceback
-import io
-from PIL import Image
-
 
 load_dotenv()
 
@@ -31,52 +24,6 @@ SUPABASE_KEY = os.getenv("servicerolekey")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI(title="Pokemon Card Scanner API", version="1.0.0")
-
-def convert_numpy_types(obj):
-    """Recursively convert numpy types to Python types for JSON serialization"""
-    if isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, np.floating):
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, dict):
-        return {key: convert_numpy_types(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_numpy_types(item) for item in obj]
-    return obj
-
-
-async def read_image_from_upload(file: UploadFile): #read and turn an UploadFile into an OpenCV BGR image.
-    image_data = await file.read()
-
-    # Try OpenCV first
-    try:
-        np_array = np.frombuffer(image_data, np.uint8)
-        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
-        if image is not None:
-            return image, image_data
-    except Exception:
-        image = None
-
-    # Try Pillow
-    try:
-        try:
-            import pillow_heif
-            try:
-                pillow_heif.register_heif_opener()
-            except Exception:
-                pass
-        except Exception:
-            pass
-
-        pil_img = Image.open(io.BytesIO(image_data)).convert('RGB')
-        image = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-        return image, image_data
-    except Exception:
-        pass
-
-    return None, image_data
 
 # Add CORS middleware to allow requests
 app.add_middleware(
@@ -189,121 +136,30 @@ def add_card_to_user_collection(username: str, card_id: str, quantity: int = 1):
         print(f"Error adding card to user collection: {e}")
         return {"success": False, "error": str(e)}
 
-# Global flag to track CLIP initialization
-_clip_initialized = False
-
-# Initialize CLIP matcher on startup (non-blocking)
+# Initialize CLIP matcher on startup
 @app.on_event("startup")
 async def startup_event():
-    # CLIP now loads lazily on first scan request instead of at startup
-    # This reduces memory usage on free hosting (512MB limit)
-    print("[STARTUP] App started - CLIP will initialize on first scan")
-    print(f"[STARTUP] Current working directory: {os.getcwd()}")
-    print(f"[STARTUP] Python version: {os.sys.version}")
-    loop.run_in_executor(None, init_clip_background)
-    print("[STARTUP] CLIP initialization task started in background")
+    print("Initializing CLIP")
+    if initialize_clip_matcher():
+        print("CLIP ready")
+    else:
+        print("CLIP failed")
 
 @app.get("/") #home page
 async def root(): #check if up
-    return {
-        "status": "online", 
-        "service": "Pokemon Card Scanner API",
-        "clip_initialized": _clip_initialized
-    }
-
-@app.get("/health") #health check with CLIP status
-async def health():
-    return {
-        "status": "healthy",
-        "clip_ready": _clip_initialized
-    }
-
-@app.post("/init_clip") #Manual CLIP initialization endpoint for debugging
-async def manual_init_clip():
-    """Manually trigger CLIP initialization and return detailed status"""
-    global _clip_initialized
-    
-    if _clip_initialized:
-        return {
-            "status": "already_initialized",
-            "message": "CLIP is already initialized",
-            "clip_ready": True
-        }
-    
-    print("[MANUAL_INIT] Starting manual CLIP initialization...")
-    try:
-        success = initialize_clip_matcher()
-        if success:
-            _clip_initialized = True
-            return {
-                "status": "success",
-                "message": "CLIP initialized successfully",
-                "clip_ready": True
-            }
-        else:
-            return {
-                "status": "failed",
-                "message": "CLIP initialization returned False - check logs for details",
-                "clip_ready": False
-            }
-    except Exception as e:
-        import traceback
-        error_trace = traceback.format_exc()
-        return {
-            "status": "error",
-            "message": f"Exception during CLIP initialization: {str(e)}",
-            "traceback": error_trace,
-            "clip_ready": False
-        }
-
-@app.get("/debug/files") #Check if required files exist
-async def debug_files():
-    """Check if CLIP/FAISS files exist on the server"""
-    import os
-    project_root = os.path.join(os.path.dirname(__file__), '..')
-    
-    files_to_check = {
-        "index": os.path.join(project_root, 'Training', 'training_card_identifier', 'clip_card_index.faiss'),
-        "map": os.path.join(project_root, 'Training', 'training_card_identifier', 'clip_card_index_map.pkl'),
-        "yolo_model": os.path.join(project_root, 'detector_models', 'pokemon_detector4', 'weights', 'best.pt'),
-    }
-    
-    results = {}
-    for name, path in files_to_check.items():
-        exists = os.path.exists(path)
-        size = os.path.getsize(path) if exists else 0
-        results[name] = {
-            "path": path,
-            "exists": exists,
-            "size_mb": round(size / (1024 * 1024), 2) if exists else 0
-        }
-    
-    return {
-        "working_directory": os.getcwd(),
-        "project_root": project_root,
-        "files": results,
-        "clip_initialized": _clip_initialized
-    }
+    return {"status": "online", "service": "Pokemon Card Scanner API"}
 
 @app.post("/scan_card_extra_info/") #Scan uploaded image and return extra info (for seeing the process work)
 async def scan_card_extra_info(file: UploadFile = File(...)):
     try:
-        # Check if CLIP is ready
-        if not _clip_initialized:
-            return JSONResponse(
-                content={
-                    "error": "CLIP model is still initializing. Please try again in a moment.",
-                    "clip_ready": False
-                },
-                status_code=503
-            )
+        #GET THE IMAGE
+        image_data = await file.read()
+        np_array = np.frombuffer(image_data, np.uint8)
+        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
         
-        # GET THE IMAGE (supports HEIC/HEIF via Pillow/pyheif fallback)
-        image, _ = await read_image_from_upload(file)
-
         if image is None:
             return JSONResponse(
-                content={"error": "Invalid or unsupported image file"},
+                content={"error": "Invalid image file"},
                 status_code=400
             )
 
@@ -403,21 +259,14 @@ async def scan_card_extra_info(file: UploadFile = File(...)):
 @app.post("/scan_card/") #Scan uploaded image (no extra info just straight business)
 async def scan_card(file: UploadFile = File(...)): 
     try:
-        # Check if CLIP is ready
-        if not _clip_initialized:
-            return JSONResponse(
-                content={
-                    "error": "CLIP model is still initializing. Please try again in a moment.",
-                    "clip_ready": False
-                },
-                status_code=503  # Service Unavailable
-            )
+        #GET THE IMAGE
+        image_data = await file.read()
+        np_array = np.frombuffer(image_data, np.uint8)
+        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
         
-        image, _ = await read_image_from_upload(file)
-
         if image is None:
             return JSONResponse(
-                content={"error": "Invalid or unsupported image file"},
+                content={"error": "Invalid image file"},
                 status_code=400
             )
 
@@ -503,21 +352,14 @@ async def scan_card(file: UploadFile = File(...)):
 @app.post("/scan_multiple_cards/") #Scan multiple Pokemon cards from a single image, ONLY FOR UPLOADING IMAGES
 async def scan_multiple_cards(file: UploadFile = File(...)):
     try:
-        # Check if CLIP is ready
-        if not _clip_initialized:
-            return JSONResponse(
-                content={
-                    "error": "CLIP model is still initializing. Please try again in a moment.",
-                    "clip_ready": False
-                },
-                status_code=503
-            )
+        # GET THE IMAGE
+        image_data = await file.read()
+        np_array = np.frombuffer(image_data, np.uint8)
+        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
         
-        image, _ = await read_image_from_upload(file)
-
         if image is None:
             return JSONResponse(
-                content={"error": "Invalid or unsupported image file"},
+                content={"error": "Invalid image file"},
                 status_code=400
             )
 
@@ -697,9 +539,6 @@ async def scan_multiple_cards(file: UploadFile = File(...)):
         }
 
         print("built now send")
-
-        # Convert numpy types to Python types for JSON serialization
-        response_data = convert_numpy_types(response_data)
 
         return JSONResponse(content=response_data, status_code=200)
 

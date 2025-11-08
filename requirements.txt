@@ -1,36 +1,29 @@
-# Web Framework & API
+source venv/bin/activate# Web Framework & API
 fastapi>=0.104.0
 uvicorn>=0.24.0
 pydantic>=2.0.0
 python-multipart>=0.0.6  # For file uploads
-
-# Performance improvements for uvicorn
-uvloop>=0.17.0
-httptools>=0.6.0
 
 # Database
 supabase>=2.0.0
 python-dotenv>=1.0.0
 
 # Computer Vision & Image Processing
-opencv-python-headless>=4.8.0  # Headless version (smaller, no GUI)
+opencv-python>=4.8.0
 Pillow>=10.0.0
 numpy>=1.24.0
 
 # Object Detection (YOLO)
 ultralytics>=8.0.0  # Includes YOLOv8
-# Note: torch and torchvision installed separately with CPU-only version
+torch>=2.0.0
+torchvision>=0.15.0
 
 # OCR (Optical Character Recognition)
 easyocr>=1.7.0
 pytesseract>=0.3.10  # Backup OCR (if needed)
 
 # Visual Similarity Matching (CLIP)
-git+https://github.com/openai/CLIP.git  # OpenAI CLIP model
 faiss-cpu>=1.7.4  # Facebook AI Similarity Search (use faiss-gpu if you have CUDA)
 
 # HTTP & API Calls
 requests>=2.31.0
- 
-# HEIC support (use pillow-heif which integrates with Pillow and is more portable)
-pillow-heif>=0.11.0

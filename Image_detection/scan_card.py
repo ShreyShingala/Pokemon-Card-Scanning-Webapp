@@ -92,12 +92,6 @@ def getbounding(image_input=None, display=True, multi_card=False, conf_threshold
             
             h, w = image.shape[:2]
             bbox_image = image.copy()
-            # Compute drawing thicknesses scaled to image size so boxes are visible
-            # Use a small proportion of the smaller image dimension with sensible minima
-            base_dim = min(h, w)
-            rect_thickness = max(2, int(round(base_dim * 0.005)))
-            text_thickness = max(1, int(round(base_dim * 0.003)))
-            corner_radius = max(3, int(round(base_dim * 0.002)))
             
             if multi_card:
                 # Process ALL detected cards above threshold
@@ -120,12 +114,12 @@ def getbounding(image_input=None, display=True, multi_card=False, conf_threshold
                     
                     # Draw bounding box with different colors for each card
                     color = ((idx * 80) % 255, (idx * 120 + 100) % 255, (idx * 160 + 50) % 255)
-                    cv2.rectangle(bbox_image, (int(x1), int(y1)), (int(x2), int(y2)), color, rect_thickness)
+                    cv2.rectangle(bbox_image, (int(x1), int(y1)), (int(x2), int(y2)), color, 3)
                     
                     # Add label with card number and confidence
                     text = f'Card {idx+1} ({confidence:.1%})'
                     cv2.putText(bbox_image, text, (int(x1), int(y1) - 10), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, text_thickness)
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
                     
                     print(f"  Card {idx+1}: Confidence {confidence:.1%} at [{bbox_norm[0]:.3f}, {bbox_norm[1]:.3f}, {bbox_norm[2]:.3f}, {bbox_norm[3]:.3f}]")
                 
@@ -148,13 +142,13 @@ def getbounding(image_input=None, display=True, multi_card=False, conf_threshold
                 bbox_norm = [x1/w, y1/h, x2/w, y2/h]
                 
                 # Draw bounding box on image copy for visualization
-                cv2.rectangle(bbox_image, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), rect_thickness)
-                cv2.circle(bbox_image, (int(x1), int(y1)), corner_radius, (0, 0, 255), -1)  # Top-left
-                cv2.circle(bbox_image, (int(x2), int(y2)), corner_radius, (255, 0, 0), -1)  # Bottom-right
+                cv2.rectangle(bbox_image, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 3)
+                cv2.circle(bbox_image, (int(x1), int(y1)), 5, (0, 0, 255), -1)  # Top-left
+                cv2.circle(bbox_image, (int(x2), int(y2)), 5, (255, 0, 0), -1)  # Bottom-right
                 
                 # Add text
                 text = f'Pokemon Card ({confidence:.1%})'
-                cv2.putText(bbox_image, text, (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), text_thickness)
+                cv2.putText(bbox_image, text, (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 
                 if display:
                     # Display
@@ -350,32 +344,17 @@ def initialize_clip_matcher(): #Lazy initialize CLIP, FAISS and mappings. Force 
     global _clip_model, _clip_preprocess, _faiss_index, _faiss_image_paths
 
     if _clip_model is not None:
-        print("[CLIP] Already initialized, skipping")
         return True
 
-    print("[CLIP] Starting initialization...")
-    
     # Paths to index/map built earlier
     project_root = os.path.join(os.path.dirname(__file__), '..')
     index_path = os.path.join(project_root, 'Training', 'training_card_identifier', 'clip_card_index.faiss')
     map_path = os.path.join(project_root, 'Training', 'training_card_identifier', 'clip_card_index_map.pkl')
 
-    print(f"[CLIP] Project root: {project_root}")
-    print(f"[CLIP] Looking for index at: {index_path}")
-    print(f"[CLIP] Looking for map at: {map_path}")
-    print(f"[CLIP] Index exists: {os.path.exists(index_path)}")
-    print(f"[CLIP] Map exists: {os.path.exists(map_path)}")
-    
     # Quick existence checks
-    if not os.path.exists(index_path):
-        print(f"[CLIP] ✗ FAISS index not found at: {index_path}")
+    if not os.path.exists(index_path) or not os.path.exists(map_path):
+        print(f"CLIP/FAISS index or map not found. Expected at:\n  {index_path}\n  {map_path}")
         return False
-    
-    if not os.path.exists(map_path):
-        print(f"[CLIP] ✗ Pickle map not found at: {map_path}")
-        return False
-    
-    print(f"[CLIP] ✓ Both index and map files found")
 
     # Some hacky force fixes
     os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
@@ -386,57 +365,34 @@ def initialize_clip_matcher(): #Lazy initialize CLIP, FAISS and mappings. Force 
 
     # Import torch/clip/faiss lazily
     try:
-        print("[CLIP] Importing dependencies...")
         # Force CPU to avoid MPS cause it causes issues
         torch.set_default_device('cpu')
         torch_device = 'cpu'
-        print(f"[CLIP] Using device: {torch_device}")
 
         import clip
         import faiss
         import pickle
-        print("[CLIP] ✓ Dependencies imported successfully")
 
         # Load CLIP model (force jit=False)
         try:
-            # Use project-relative cache directory that persists on Render
-            cache_dir = os.path.join(project_root, '.clip_cache')
-            os.makedirs(cache_dir, exist_ok=True)
-            cache_model = os.path.join(cache_dir, 'ViT-B-32.pt')
-            print(f"[CLIP] Cache directory: {cache_dir}")
-            print(f"[CLIP] Checking for cached model at: {cache_model}")
-            
+            cache_model = os.path.expanduser('~/.cache/clip/ViT-B-32.pt')
             if os.path.exists(cache_model):
-                print(f"[CLIP] ✓ Using cached CLIP model: {cache_model}")
-            else:
-                print(f"[CLIP] ! Model not cached - downloading 338MB (may take time/cause OOM on small dynos)")
-            
-            print(f"[CLIP] Loading CLIP model...")
-            _clip_model, _clip_preprocess = clip.load('ViT-B/32', device=torch_device, jit=False, download_root=cache_dir)
-            print(f"[CLIP] ✓ CLIP model loaded successfully")
+                print(f"Using cached CLIP model: {cache_model}")
+            _clip_model, _clip_preprocess = clip.load('ViT-B/32', device=torch_device, jit=False)
         except Exception as e:
-            print(f"[CLIP] ✗ Error loading CLIP model: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error loading CLIP model: {e}")
             raise
 
         # Load FAISS index and mapping
-        print(f"[CLIP] Loading FAISS index from: {index_path}")
         _faiss_index = faiss.read_index(index_path)
-        print(f"[CLIP] ✓ FAISS index loaded")
-        
-        print(f"[CLIP] Loading pickle map from: {map_path}")
         with open(map_path, 'rb') as f:
             _faiss_image_paths = pickle.load(f)
-        print(f"[CLIP] ✓ Pickle map loaded with {len(_faiss_image_paths)} entries")
 
-        print(f"[CLIP] ✓✓✓ CLIP + FAISS fully initialized: indexed {_faiss_index.ntotal} cards")
+        print(f"CLIP + FAISS initialized: indexed {_faiss_index.ntotal} cards")
         return True
 
     except Exception as e:
-        print(f"[CLIP] ✗✗✗ Failed to initialize CLIP matcher: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Failed to initialize CLIP matcher: {e}")
         return False
 
 
