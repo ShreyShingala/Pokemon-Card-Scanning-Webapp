@@ -13,6 +13,11 @@ ROOT_DIR=$(cd "$(dirname "$0")" && pwd)
 DST_DIR="$ROOT_DIR/Training/training_card_identifier"
 mkdir -p "$DST_DIR"
 
+# If model files are already present in the repository at the expected location,
+if [ -f "$DST_DIR/clip_card_index.faiss" ] && [ -f "$DST_DIR/clip_card_index_map.pkl" ]; then
+	echo "Model files already present in repo at $DST_DIR — skipping download."
+else
+
 if [ "$USE_SUPABASE" = "true" ]; then
 	echo "Using Supabase to download model assets..."
 	if [ -z "${SUPABASE_URL-}" ] || [ -z "${SUPABASE_KEY-}" ]; then
@@ -94,6 +99,8 @@ if not copied:
 		print('No expected index/map files found in snapshot — check repo contents')
 PY
 	fi
+fi
+
 fi
 
 echo "Starting uvicorn on port ${PORT}..."
