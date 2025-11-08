@@ -10,3 +10,4 @@ __pycache__/
 pokemon-scanner-next/.env.local
 pokemon-scanner-next/node_modules/
 pokemon-scanner-next/.next/HuggingFaceModel/
+.HuggingFaceModel/
