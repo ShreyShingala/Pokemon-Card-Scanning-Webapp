@@ -3,6 +3,7 @@ import './globals.css'
 import Sidebar from '@/components/Sidebar'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
+import { Analytics } from '@vercel/analytics/next'
 
 export const metadata: Metadata = {
   title: 'PokéScanner - Card Collection Manager',
@@ -25,6 +26,7 @@ export default function RootLayout({
             </main>
           </AuthProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   )
