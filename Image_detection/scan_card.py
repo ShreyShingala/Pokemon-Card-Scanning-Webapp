@@ -378,9 +378,11 @@ def initialize_clip_matcher(): #Lazy initialize CLIP, FAISS and mappings. Force 
             cache_model = os.path.expanduser('~/.cache/clip/ViT-B-32.pt')
             if os.path.exists(cache_model):
                 print(f"Using cached CLIP model: {cache_model}")
-            _clip_model, _clip_preprocess = clip.load('ViT-B/32', device=torch_device, jit=False)
+            else:
+                print(f"CLIP model not cached - will download 338MB (may cause OOM on 512MB instances)")
+            _clip_model, _clip_preprocess = clip.load('ViT-B/32', device=torch_device, jit=False, download_root=os.path.expanduser('~/.cache/clip'))
         except Exception as e:
-            print(f"Error loading CLIP model: {e}")
+            print(f"Error loading CLIP model (likely OOM): {e}")
             raise
 
         # Load FAISS index and mapping

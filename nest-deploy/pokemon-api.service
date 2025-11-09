@@ -1,0 +1,17 @@
+[Unit]
+Description=Pokemon Card Scanner API (FastAPI + YOLO + CLIP)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Pokemon-Card-Scanning-Webapp
+Environment="PORT=8080"
+Environment="PATH=%h/Pokemon-Card-Scanning-Webapp/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=%h/Pokemon-Card-Scanning-Webapp/venv/bin/uvicorn Image_detection.main:app --host 127.0.0.1 --port 8080
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
