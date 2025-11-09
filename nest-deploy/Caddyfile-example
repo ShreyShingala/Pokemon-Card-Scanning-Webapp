@@ -1,0 +1,31 @@
+# Pokemon Card Scanner API - Caddy Configuration
+
+# Add this to your ~/Caddyfile on Nest
+
+# Replace <username> with your actual Nest username
+https://<username>.hackclub.app {
+    # Reverse proxy all /api/* requests to the FastAPI backend
+    reverse_proxy /api/* localhost:8080
+    
+    # CORS headers for frontend access
+    header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers *
+    }
+    
+    # Optional: Serve frontend from ~/pub (if you want to host it on Nest too)
+    # root * /home/<username>/pub
+    # file_server
+}
+
+# Alternative: If you want API on root path instead of /api/*
+# https://<username>.hackclub.app {
+#     reverse_proxy localhost:8080
+#     
+#     header {
+#         Access-Control-Allow-Origin *
+#         Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+#         Access-Control-Allow-Headers *
+#     }
+# }
