@@ -136,22 +136,58 @@ def add_card_to_user_collection(username: str, card_id: str, quantity: int = 1):
         print(f"Error adding card to user collection: {e}")
         return {"success": False, "error": str(e)}
 
-# Initialize CLIP matcher on startup
+# Global flag to track CLIP initialization
+_clip_initialized = False
+
+# Initialize CLIP matcher on startup (non-blocking)
 @app.on_event("startup")
 async def startup_event():
-    print("Initializing CLIP")
-    if initialize_clip_matcher():
-        print("CLIP ready")
-    else:
-        print("CLIP failed")
+    import asyncio
+    global _clip_initialized
+    
+    # Run CLIP initialization in background thread to not block startup
+    def init_clip_background():
+        global _clip_initialized
+        print("Initializing CLIP in background...")
+        if initialize_clip_matcher():
+            _clip_initialized = True
+            print("CLIP ready")
+        else:
+            print("CLIP failed to initialize")
+    
+    # Run in thread pool executor to not block event loop
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, init_clip_background)
+    print("CLIP initialization started in background")
 
 @app.get("/") #home page
 async def root(): #check if up
-    return {"status": "online", "service": "Pokemon Card Scanner API"}
+    return {
+        "status": "online", 
+        "service": "Pokemon Card Scanner API",
+        "clip_initialized": _clip_initialized
+    }
+
+@app.get("/health") #health check with CLIP status
+async def health():
+    return {
+        "status": "healthy",
+        "clip_ready": _clip_initialized
+    }
 
 @app.post("/scan_card_extra_info/") #Scan uploaded image and return extra info (for seeing the process work)
 async def scan_card_extra_info(file: UploadFile = File(...)):
     try:
+        # Check if CLIP is ready
+        if not _clip_initialized:
+            return JSONResponse(
+                content={
+                    "error": "CLIP model is still initializing. Please try again in a moment.",
+                    "clip_ready": False
+                },
+                status_code=503
+            )
+        
         #GET THE IMAGE
         image_data = await file.read()
         np_array = np.frombuffer(image_data, np.uint8)
@@ -259,6 +295,16 @@ async def scan_card_extra_info(file: UploadFile = File(...)):
 @app.post("/scan_card/") #Scan uploaded image (no extra info just straight business)
 async def scan_card(file: UploadFile = File(...)): 
     try:
+        # Check if CLIP is ready
+        if not _clip_initialized:
+            return JSONResponse(
+                content={
+                    "error": "CLIP model is still initializing. Please try again in a moment.",
+                    "clip_ready": False
+                },
+                status_code=503  # Service Unavailable
+            )
+        
         #GET THE IMAGE
         image_data = await file.read()
         np_array = np.frombuffer(image_data, np.uint8)
@@ -352,6 +398,16 @@ async def scan_card(file: UploadFile = File(...)):
 @app.post("/scan_multiple_cards/") #Scan multiple Pokemon cards from a single image, ONLY FOR UPLOADING IMAGES
 async def scan_multiple_cards(file: UploadFile = File(...)):
     try:
+        # Check if CLIP is ready
+        if not _clip_initialized:
+            return JSONResponse(
+                content={
+                    "error": "CLIP model is still initializing. Please try again in a moment.",
+                    "clip_ready": False
+                },
+                status_code=503
+            )
+        
         # GET THE IMAGE
         image_data = await file.read()
         np_array = np.frombuffer(image_data, np.uint8)
