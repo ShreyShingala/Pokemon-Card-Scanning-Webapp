@@ -25,6 +25,20 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI(title="Pokemon Card Scanner API", version="1.0.0")
 
+def convert_numpy_types(obj):
+    """Recursively convert numpy types to Python types for JSON serialization"""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    return obj
+
 # Add CORS middleware to allow requests
 app.add_middleware(
     CORSMiddleware,
@@ -595,6 +609,9 @@ async def scan_multiple_cards(file: UploadFile = File(...)):
         }
 
         print("built now send")
+
+        # Convert numpy types to Python types for JSON serialization
+        response_data = convert_numpy_types(response_data)
 
         return JSONResponse(content=response_data, status_code=200)
 
