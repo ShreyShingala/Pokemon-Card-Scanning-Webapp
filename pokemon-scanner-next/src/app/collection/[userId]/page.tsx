@@ -18,7 +18,7 @@ interface CardItem {
     rarity: string
     types: string[]
     hp: string
-    nationalPokedexNumbers: number[]
+    national_pokedex_numbers: number[]
     artist?: string
   }
   attack_details: Array<{
@@ -273,7 +273,7 @@ export default function UserCollectionPage({ params }: { params: Promise<{ userI
   
   const getFamilyKey = (card: any): number | string => { //find family key for sorting
     // Prefer numeric Pokedex (first entry)
-    const pokedexArr = card.national_pokedex_numbers || card.nationalPokedexNumbers || []
+    const pokedexArr = card.national_pokedex_numbers || []
     if (Array.isArray(pokedexArr) && pokedexArr.length > 0) {
       // Use number (lowest entry if multiple)
       return Number(pokedexArr[0]) || pokedexArr[0]
@@ -441,8 +441,8 @@ export default function UserCollectionPage({ params }: { params: Promise<{ userI
           }
           break
         case 'pokedex':
-          const pokedexA = a.card_details.nationalPokedexNumbers || []
-          const pokedexB = b.card_details.nationalPokedexNumbers || []
+          const pokedexA = a.card_details.national_pokedex_numbers || []
+          const pokedexB = b.card_details.national_pokedex_numbers || []
 
           compareA = (Array.isArray(pokedexA) && pokedexA.length > 0) ? Number(pokedexA[0]) : Infinity
           compareB = (Array.isArray(pokedexB) && pokedexB.length > 0) ? Number(pokedexB[0]) : Infinity
@@ -724,8 +724,8 @@ export default function UserCollectionPage({ params }: { params: Promise<{ userI
                     { // Pokédex Numbers
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Pokédex #:</span>
-                      {(card as any).nationalPokedexNumbers && (card as any).nationalPokedexNumbers.length > 0 ? (
-                        <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{(card as any).nationalPokedexNumbers.join(', ')}</span>
+                      {(card as any).national_pokedex_numbers && (card as any).national_pokedex_numbers.length > 0 ? (
+                        <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{(card as any).national_pokedex_numbers.join(', ')}</span>
                       ) : (
                         <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{"N/A"}</span>
                       )}
@@ -1006,12 +1006,11 @@ export default function UserCollectionPage({ params }: { params: Promise<{ userI
                       <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{selectedCard.card_details.number}</span>
                     </>
                   )}
-                  {((selectedCard.card_details.nationalPokedexNumbers && selectedCard.card_details.nationalPokedexNumbers.length > 0) || 
-                    ((selectedCard.card_details as any).national_pokedex_numbers && (selectedCard.card_details as any).national_pokedex_numbers.length > 0)) && (
+                  {(selectedCard.card_details.national_pokedex_numbers && selectedCard.card_details.national_pokedex_numbers.length > 0) && (
                     <>
                       <span style={{ fontWeight: '600', color: isDarkMode ? '#cbd5e1' : '#475569' }}>Pokédex #:</span>
                       <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>
-                        {selectedCard.card_details.nationalPokedexNumbers?.join(', ') || (selectedCard.card_details as any).national_pokedex_numbers?.join(', ')}
+                        {selectedCard.card_details.national_pokedex_numbers.join(', ')}
                       </span>
                     </>
                   )}
