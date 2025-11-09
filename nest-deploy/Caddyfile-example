@@ -5,7 +5,7 @@
 # Replace <username> with your actual Nest username
 https://<username>.hackclub.app {
     # Reverse proxy all /api/* requests to the FastAPI backend
-    reverse_proxy /api/* localhost:8080
+    reverse_proxy /api/* localhost:9573
     
     # CORS headers for frontend access
     header {
@@ -21,7 +21,7 @@ https://<username>.hackclub.app {
 
 # Alternative: If you want API on root path instead of /api/*
 # https://<username>.hackclub.app {
-#     reverse_proxy localhost:8080
+#     reverse_proxy localhost:9573
 #     
 #     header {
 #         Access-Control-Allow-Origin *
