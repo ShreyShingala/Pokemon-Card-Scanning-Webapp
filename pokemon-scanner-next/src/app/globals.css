@@ -761,6 +761,133 @@ body {
     transition: all 0.3s ease;
 }
 
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 2000;
+    width: 100vw;
+    height: 100vh;
+}
+
+.modal-content {
+    width: 100%;
+    max-width: 1000px; 
+    max-height: 95vh;  
+    background: var(--card-bg, white);
+    border-radius: 15px;
+    display: flex;
+    gap: 0;
+    margin: 24px;
+    padding: 0; 
+    align-items: center;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+    overflow: hidden;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.modal-left {
+    flex: 0 0 45%; 
+    padding: 20px;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    background: var(--card-left-bg, #f8fafc);
+    border-radius: 15px 0 0 15px;
+}
+
+.modal-left img {
+    width: auto;
+    height: 100%;
+    max-height: none;
+    object-fit: contain;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    display: block;
+}
+
+@media (min-width: 769px) {
+    .dark-mode .modal-left {
+        background-color: rgb(15, 23, 42) !important; 
+    }
+
+    .modal-left img {
+        box-shadow: rgba(0, 0, 0, 0.15) 0px 8px 24px !important;
+    }
+
+    .modal-content {
+        align-items: stretch !important;
+    }
+
+    .modal-left {
+        padding: 12px !important;
+    }
+
+    .modal-left img {
+        height: 100% !important;
+        width: auto !important;
+        max-width: 100% !important;
+        object-fit: contain !important;
+        object-position: center !important;
+        border-radius: 10px !important;
+    }
+
+    .modal-left {
+        align-items: center !important;
+        display: flex !important;
+    }
+
+    .modal-left img {
+        height: auto !important;
+        max-height: calc(100% - 8px) !important;
+        margin: 0 auto !important;
+        align-self: center !important;
+    }
+}
+
+.modal-right {
+    flex: 1 1 auto;
+    padding: 40px;
+    overflow-y: auto;
+    background: var(--card-bg, white);
+    border-radius: 0 15px 15px 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-close {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 2010;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.9);
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    cursor: pointer;
+    color: var(--modal-close-color, #334155);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 12px;
+    border-top: 1px solid rgba(0,0,0,0.06);
+}
+
 .card-item {
     background: white;
     border-radius: 15px;
@@ -884,6 +1011,154 @@ body {
 
     .confirm-btn {
         max-width: none;
+    }
+
+    .sort-controls {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+        padding: 12px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .collection-scroll-wrapper {
+        width: 100%;
+        max-width: 720px;
+        margin: 0 auto 10px auto;
+        height: 75vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        background: transparent;
+        position: relative;
+        border-radius: 12px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+        border: 1px solid rgba(0,0,0,0.04);
+    }
+
+    .collection-grid.mobile-inner {
+        display: block !important;
+        padding: 8px !important;
+    }
+
+    .collection-grid.mobile-inner .card-item {
+        width: 100% !important;
+        margin: 0 0 12px 0 !important;
+        min-height: auto !important;
+        scroll-snap-align: start !important;
+        display: block !important;
+        box-sizing: border-box !important;
+        padding: 8px !important;
+    }
+
+    .collection-scroll-wrapper::before,
+    .collection-scroll-wrapper::after {
+        content: '';
+        position: sticky;
+        left: 0;
+        right: 0;
+        height: 28px;
+        pointer-events: none;
+        z-index: 6;
+    }
+
+    .collection-scroll-wrapper::before {
+        top: 0;
+        background: linear-gradient(to bottom, rgba(255,255,255,0.9), rgba(255,255,255,0));
+    }
+
+    .collection-scroll-wrapper::after {
+        bottom: 0;
+        background: linear-gradient(to top, rgba(255,255,255,0.9), rgba(255,255,255,0));
+    }
+
+    /* Dark mode versions of the gradient overlays */
+    .dark-mode .collection-scroll-wrapper::before,
+    .dark-mode .collection-scroll-wrapper::after {
+        background: linear-gradient(to bottom, rgba(15,23,42,0.95), rgba(15,23,42,0));
+    }
+
+    .collection-scroll-wrapper::-webkit-scrollbar { width: 7px; }
+    .collection-scroll-wrapper::-webkit-scrollbar-track { background: transparent; }
+    .collection-scroll-wrapper::-webkit-scrollbar-thumb { background: rgba(37,99,235,0.45); border-radius: 8px; }
+
+    .collection-grid.mobile-inner .card-item img {
+        max-height: 34vh !important;
+        object-fit: contain !important;
+    }
+
+    .collection-grid:not(.mobile-inner) { display: none !important; }
+
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.75);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 12px;
+        z-index: 2000;
+    }
+
+    .modal-content {
+        width: 100%;
+        max-width: 820px;
+        height: calc(100vh - 24px);
+        background: transparent;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .modal-left {
+        display: none !important;
+    }
+
+    .modal-left img {
+        width: 100%;
+        height: auto;
+        max-height: 48vh;
+        object-fit: contain;
+        border-radius: 12px;
+    }
+
+    .modal-right {
+        flex: 1 1 auto;
+        padding: 16px;
+        overflow-y: auto;
+        background: var(--card-bg, white);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+
+    .modal-close {
+        position: absolute;
+        right: 14px;
+        top: 14px;
+        z-index: 2010;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        border: none;
+        background: rgba(255,255,255,0.95);
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 0 6px 0;
+        border-top: 1px solid rgba(0,0,0,0.06);
+        background: transparent;
+        position: sticky;
+        bottom: 0;
     }
 }
 
@@ -1052,13 +1327,15 @@ body {
 
 /* Modal */
 .dark-mode .modal-overlay {
-    background: rgba(0, 0, 0, 0.85);
+    /* Use the same overlay as the leaderboard/user-collection view for consistency */
+    background: rgba(0, 0, 0, 0.7) !important;
 }
 
 .dark-mode .modal-content {
-    background: #1e293b;
+    /* Match the user-collection modal surface color used in the leaderboard flow */
+    background: #1e293b !important; /* slate-800 used in reference modal */
     color: #e5e7eb;
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
 }
 
 .dark-mode .modal-close {
@@ -1068,6 +1345,16 @@ body {
 
 .dark-mode .modal-close:hover {
     background: #475569;
+}
+
+/* Dark-mode variant for the left image panel to match leaderboard/user-collection modal */
+.dark-mode .modal-left {
+    background: #0f172a; /* exact color used inline in the leaderboard/user-collection view */
+}
+
+/* Ensure the details panel inside the modal matches the same surface in dark mode */
+.dark-mode .modal-right {
+    background: #1e293b !important;
 }
 
 /* Loading Spinner */

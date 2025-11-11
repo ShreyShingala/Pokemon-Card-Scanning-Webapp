@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -58,6 +58,10 @@ export default function CollectionPage() {
   const [selectedCard, setSelectedCard] = useState<CardItem | null>(null)
   const [isPublic, setIsPublic] = useState<boolean | null>(null)
   const [togglingPublic, setTogglingPublic] = useState(false)
+  const [deletePending, setDeletePending] = useState(false)
+  const deleteTimeoutRef = useRef<number | null>(null)
+  // scrollRef retained if needed for future small interactions; not required for fullscreen
+  const scrollRef = useRef<HTMLDivElement | null>(null)
 
   const rarityTiers: { [key: string]: number } = {
     'Common': 1,
@@ -132,6 +136,21 @@ export default function CollectionPage() {
     loadProfilePublicStatus()
   }, [user, authLoading, router])
 
+  // Reset delete confirmation when selected card changes or component unmounts
+  useEffect(() => {
+    setDeletePending(false)
+    if (deleteTimeoutRef.current) {
+      window.clearTimeout(deleteTimeoutRef.current)
+      deleteTimeoutRef.current = null
+    }
+    return () => {
+      if (deleteTimeoutRef.current) {
+        window.clearTimeout(deleteTimeoutRef.current)
+        deleteTimeoutRef.current = null
+      }
+    }
+  }, [selectedCard])
+
   const loadCollection = async () => {
     if (!user) return
 
@@ -159,6 +178,8 @@ export default function CollectionPage() {
       setLoading(false)
     }
   }
+
+  // Fullscreen feature removed — no listeners required
 
     const loadProfilePublicStatus = async () => {
       if (!user) return
@@ -222,10 +243,28 @@ export default function CollectionPage() {
   }
 
   const deleteCard = async (cardId: string) => {
-    if (!user) return
+    // No confirm() here — confirmation is handled by in-modal double-click behavior.
+    // Helper to remove locally (UI update)
+    const removeLocally = () => {
+      setCollection(prev => prev.filter(item => item.card_id !== cardId))
+      setTotalCards(prev => Math.max(0, prev - 1))
+      const deletedItem = collection.find(item => item.card_id === cardId)
+      if (deletedItem) {
+        setTotalQuantity(prev => Math.max(0, prev - deletedItem.quantity))
+      }
+      setSelectedCard(null) // Close modal
+      setDeletePending(false)
+      if (deleteTimeoutRef.current) {
+        window.clearTimeout(deleteTimeoutRef.current)
+        deleteTimeoutRef.current = null
+      }
+    }
 
-    const confirmed = confirm('Are you sure you want to remove this card from your collection?')
-    if (!confirmed) return
+    // If there's no authenticated user, just remove locally (works for local-only cards)
+    if (!user) {
+      removeLocally()
+      return
+    }
 
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/delete_card/?user_id=${user.id}&card_id=${cardId}`, {
@@ -234,17 +273,20 @@ export default function CollectionPage() {
       })
 
       if (response.ok) {
-        // Remove from local state
-        setCollection(prev => prev.filter(item => item.card_id !== cardId))
-        setTotalCards(prev => prev - 1)
-        const deletedItem = collection.find(item => item.card_id === cardId)
-        if (deletedItem) {
-          setTotalQuantity(prev => prev - deletedItem.quantity)
-        }
-        setSelectedCard(null) // Close modal
+        // Server deleted — remove from local state
+        removeLocally()
+      } else {
+        // Server delete failed; remove locally so mobile UX remains responsive,
+        // but inform the user that remote deletion did not complete.
+        console.warn('Server responded with non-ok status when deleting card:', response.status)
+        removeLocally()
+        alert('Card removed locally, but failed to delete on the server. It may reappear after a refresh if the server still has it.')
       }
     } catch (err) {
       console.error('Failed to delete card:', err)
+      // Network error — remove locally so UX isn't blocked, but notify user
+      removeLocally()
+      alert('Could not reach server to delete card. The card was removed locally and may still exist on the server.')
     }
   }
 
@@ -615,7 +657,7 @@ export default function CollectionPage() {
       ) : (
         <>
           {/* Sorting Controls with Search */}
-          <div style={{
+          <div className="sort-controls" style={{
             display: 'flex',
             alignItems: 'center',
             flexWrap: 'wrap',
@@ -854,76 +896,114 @@ export default function CollectionPage() {
             })
             )}
           </div>
+
+          {/* Mobile-only scroll wrapper and fullscreen control (JS handles fullscreen) */}
+          <div className="mobile-scroll-controls" style={{ position: 'relative' }}>
+            {/* Fullscreen control removed */}
+
+            <div ref={scrollRef} className="collection-scroll-wrapper">
+              <div className="collection-grid mobile-inner">
+                {getSortedCollection().map((item) => {
+                  const card = item.card_details
+                  const imageUrl = card.image_large || card.image_small || 'https://via.placeholder.com/250x350?text=No+Image'
+                  const bgColor = getTypeColor(card.types, card.name)
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className="card-item"
+                      onClick={() => setSelectedCard(item)}
+                      style={{ 
+                        background: bgColor,
+                        transition: 'all 0.3s ease',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {/* Card Name - Centered at top */}
+                      <div style={{
+                        textAlign: 'center',
+                        fontWeight: 'bold',
+                        fontSize: '1.15em',
+                        color: isDarkMode ? '#f1f5f9' : '#1e293b',
+                        marginBottom: '12px',
+                        padding: '0 5px',
+                        lineHeight: '1.3'
+                      }}>
+                        {card.name || 'Unknown Card'}
+                      </div>
+
+                      {/* Card Image */}
+                      <img 
+                        src={imageUrl} 
+                        alt={card.name}
+                        onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/250x350?text=No+Image' }}
+                        style={{
+                          width: '100%',
+                          borderRadius: '10px',
+                          marginBottom: '12px'
+                        }}
+                      />
+
+                      {/* Card Info - Compact at bottom */}
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                        fontSize: '0.9em',
+                        color: '#475569'
+                      }}>
+                        {card.set_name && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Set:</span>
+                            <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{card.set_name}</span>
+                          </div>
+                        )}
+                        {card.number && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Card #:</span>
+                            <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{card.number}</span>
+                          </div>
+                        )}
+                        { // Pokédex Numbers
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Pokédex #:</span>
+                          {(card as any).national_pokedex_numbers && (card as any).national_pokedex_numbers.length > 0 ? (
+                            <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{(card as any).national_pokedex_numbers.join(', ')}</span>
+                          ) : (
+                            <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{"N/A"}</span>
+                          )}
+                          </div>
+                        }
+                        {card.rarity && (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Rarity:</span>
+                            <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{card.rarity}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Quantity Badge */}
+                      <div className="card-quantity" style={{ marginTop: '12px' }}>
+                        Owned: {item.quantity}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
         </>
       )}
 
       {/* Card Detail Modal */}
       {selectedCard && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '20px'
-          }}
-          onClick={() => setSelectedCard(null)}
-        >
-          <div 
-            style={{
-              backgroundColor: isDarkMode ? '#1e293b' : 'white',
-              borderRadius: '15px',
-              maxWidth: '1000px',
-              maxHeight: '90vh',
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'row',
-              overflow: 'hidden',
-              position: 'relative'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="modal-overlay" onClick={() => setSelectedCard(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             {/* Close Button */}
-            <button
-              onClick={() => setSelectedCard(null)}
-              style={{
-                position: 'absolute',
-                top: '15px',
-                right: '15px',
-                background: 'rgba(255, 255, 255, 0.9)',
-                border: 'none',
-                borderRadius: '50%',
-                width: '35px',
-                height: '35px',
-                fontSize: '20px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 10,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                fontWeight: 'bold',
-                color: '#334155'
-              }}
-            >
-              ×
-            </button>
+            <button className="modal-close" onClick={() => setSelectedCard(null)}>×</button>
 
             {/* Left Side - Card Image */}
-            <div style={{
-              flex: '0 0 45%',
-              padding: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc'
-            }}>
+            <div className="modal-left">
               {selectedCard.card_details?.image_large ? (
                 <img 
                   src={selectedCard.card_details.image_large} 
@@ -952,13 +1032,7 @@ export default function CollectionPage() {
             </div>
 
             {/* Right Side - Card Details */}
-            <div style={{
-              flex: '1',
-              padding: '40px',
-              overflowY: 'auto',
-              display: 'flex',
-              flexDirection: 'column'
-            }}>
+            <div className="modal-right">
               {/* Card Name & HP */}
               <div style={{ marginBottom: '24px' }}>
                 <h2 style={{ 
@@ -1134,15 +1208,7 @@ export default function CollectionPage() {
               </div>
 
               {/* Action Buttons */}
-              <div style={{
-                marginTop: 'auto',
-                paddingTop: '20px',
-                borderTop: `2px solid ${isDarkMode ? '#475569' : '#e2e8f0'}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '16px'
-              }}>
+              <div className="modal-actions">
                 {/* Quantity Controls */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <button
@@ -1189,14 +1255,27 @@ export default function CollectionPage() {
                   </button>
                 </div>
 
-                {/* Delete Button */}
+                {/* Delete Button: first click arms confirmation (changes text to "Are you sure?"), second click actually deletes */}
                 <button
-                  onClick={() => deleteCard(selectedCard.card_id)}
+                  onClick={() => {
+                    if (!deletePending) {
+                      setDeletePending(true)
+                      // reset after 5s if user doesn't confirm
+                      if (deleteTimeoutRef.current) window.clearTimeout(deleteTimeoutRef.current)
+                      deleteTimeoutRef.current = window.setTimeout(() => {
+                        setDeletePending(false)
+                        deleteTimeoutRef.current = null
+                      }, 5000)
+                    } else {
+                      // confirmed — perform delete
+                      deleteCard(selectedCard.card_id)
+                    }
+                  }}
                   style={{
                     padding: '10px 24px',
                     fontSize: '15px',
                     fontWeight: '600',
-                    backgroundColor: '#dc2626',
+                    backgroundColor: deletePending ? '#b91c1c' : '#dc2626',
                     color: 'white',
                     border: 'none',
                     borderRadius: '8px',
@@ -1204,10 +1283,10 @@ export default function CollectionPage() {
                     transition: 'all 0.2s'
                   }}
                 >
-                  Delete Card
+                  {deletePending ? 'Are you sure?' : 'Delete Card'}
                 </button>
               </div>
-            </div>
+              </div>
           </div>
         </div>
       )}
