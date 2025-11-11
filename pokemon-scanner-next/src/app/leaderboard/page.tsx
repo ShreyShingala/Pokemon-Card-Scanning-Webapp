@@ -22,6 +22,20 @@ export default function LeaderboardPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 5
 
+  // Track whether we're on a small/mobile viewport if so make it so clicking on name leads to profile viewing
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 640px)')
+    const update = () => setIsMobileViewport(mql.matches)
+    update()
+    if (mql.addEventListener) mql.addEventListener('change', update)
+    else mql.addListener(update)
+    return () => {
+      if (mql.removeEventListener) mql.removeEventListener('change', update)
+      else mql.removeListener(update)
+    }
+  }, [])
+
   useEffect(() => {
     loadLeaderboard()
   }, [])
@@ -97,9 +111,8 @@ export default function LeaderboardPage() {
     }
   }
 
-  // Fixed height for the main content so empty doesn't make small
-  const CONTAINER_HEIGHT_PX = 700
-  const CARD_MIN_WIDTH_PX = 760
+  // Responsive container: use minHeight instead of fixed pixel heights/widths
+  const CONTAINER_MIN_HEIGHT = '60vh'
 
   if (loading) {
     return (
@@ -178,85 +191,111 @@ export default function LeaderboardPage() {
   const Row = ({ entry, isPlaceholder = false, rank = 0 }: { entry?: LeaderboardEntry, isPlaceholder?: boolean, rank?: number }) => {
     const isTopThree = rank <= 3 && rank > 0
     return (
-      <div
-        style={{
-          background: isTopThree
-            ? (isDarkMode ? 'linear-gradient(135deg, #422006 0%, #713f12 100%)' : 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)')
-            : (isDarkMode ? '#1e293b' : 'white'),
-          borderRadius: '12px',
-          padding: '16px 18px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          boxShadow: isTopThree
-            ? (isDarkMode ? '0 6px 20px rgba(120, 53, 15, 0.35)' : '0 6px 20px rgba(161, 98, 7, 0.15)')
-            : (isDarkMode ? '0 2px 10px rgba(0,0,0,0.3)' : '0 2px 10px rgba(0,0,0,0.05)'),
-          border: isTopThree ? (isDarkMode ? '2px solid #92400e' : '2px solid #f59e0b') : 'none',
-          transition: 'all 0.15s',
-          minHeight: '64px',
-          boxSizing: 'border-box'
-        }}
-      >
-        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: isTopThree ? (isDarkMode ? '#fbbf24' : '#92400e') : (isDarkMode ? '#94a3b8' : '#94a3b8'), minWidth: '56px', textAlign: 'center' }}>
-          {isPlaceholder ? '#' : rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`}
-        </div>
-
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '1.05rem', fontWeight: 700, color: isDarkMode ? '#f1f5f9' : '#1e293b', marginBottom: '6px' }}>
-            {isPlaceholder ? <div style={{ width: '160px', height: '14px', background: isDarkMode ? '#334155' : '#f1f5f9', borderRadius: '6px' }} /> : (entry?.name || 'Unknown User')}
+      <>
+        <div
+          className="lb-row"
+          style={{
+            background: isTopThree
+              ? (isDarkMode ? 'linear-gradient(135deg, #422006 0%, #713f12 100%)' : 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)')
+              : (isDarkMode ? '#1e293b' : 'white'),
+            borderRadius: '12px',
+            padding: '16px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            boxShadow: isTopThree
+              ? (isDarkMode ? '0 6px 20px rgba(120, 53, 15, 0.35)' : '0 6px 20px rgba(161, 98, 7, 0.15)')
+              : (isDarkMode ? '0 2px 10px rgba(0,0,0,0.3)' : '0 2px 10px rgba(0,0,0,0.05)'),
+            border: isTopThree ? (isDarkMode ? '2px solid #92400e' : '2px solid #f59e0b') : 'none',
+            transition: 'all 0.15s',
+            minHeight: '64px',
+            boxSizing: 'border-box',
+            flexWrap: 'wrap'
+          }}
+        >
+          <div className="lb-rank" style={{ fontSize: '1.25rem', fontWeight: 800, color: isTopThree ? (isDarkMode ? '#fbbf24' : '#92400e') : (isDarkMode ? '#94a3b8' : '#94a3b8'), minWidth: '56px', textAlign: 'center' }}>
+            {isPlaceholder ? '#' : rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`}
           </div>
-          <div style={{ display: 'flex', gap: '18px', fontSize: '0.9rem', color: isDarkMode ? '#94a3b8' : '#64748b' }}>
+
+          <div
+            style={{ flex: 1, minWidth: 0, cursor: isMobileViewport && !isPlaceholder ? 'pointer' : undefined }}
+            role={isMobileViewport && !isPlaceholder ? 'button' : undefined}
+            tabIndex={isMobileViewport && !isPlaceholder ? 0 : undefined}
+            onClick={() => {
+              if (isMobileViewport && !isPlaceholder && entry) {
+                handleViewCollection(entry.user_id, entry.name)
+              }
+            }}
+            onKeyDown={(e) => {
+              if (isMobileViewport && !isPlaceholder && entry && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault()
+                handleViewCollection(entry.user_id, entry.name)
+              }
+            }}
+          >
+            <div style={{ fontSize: '1.05rem', fontWeight: isMobileViewport && !isPlaceholder ? 800 : 700, textDecoration: isMobileViewport && !isPlaceholder ? 'underline' : undefined, color: isDarkMode ? '#f1f5f9' : '#1e293b', marginBottom: '6px' }}>
+              {isPlaceholder ? <div style={{ width: '160px', height: '14px', background: isDarkMode ? '#334155' : '#f1f5f9', borderRadius: '6px' }} /> : (entry?.name || 'Unknown User')}
+            </div>
+            <div style={{ display: 'flex', gap: '18px', fontSize: '0.9rem', color: isDarkMode ? '#94a3b8' : '#64748b' }}>
+              {isPlaceholder ? (
+                <>
+                  <div style={{ width: '120px', height: '12px', background: isDarkMode ? '#334155' : '#f1f5f9', borderRadius: '6px' }} />
+                  <div style={{ width: '80px', height: '12px', background: isDarkMode ? '#334155' : '#f1f5f9', borderRadius: '6px' }} />
+                </>
+              ) : (
+                <>
+                  <div><span style={{ fontWeight: 600 }}>Unique Cards:</span> {entry?.unique_cards}</div>
+                  <div><span style={{ fontWeight: 600 }}>Total Cards:</span> {entry?.total_cards}</div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="btn-wrap" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
             {isPlaceholder ? (
-              <>
-                <div style={{ width: '120px', height: '12px', background: isDarkMode ? '#334155' : '#f1f5f9', borderRadius: '6px' }} />
-                <div style={{ width: '80px', height: '12px', background: isDarkMode ? '#334155' : '#f1f5f9', borderRadius: '6px' }} />
-              </>
+              <div style={{ width: '96px', height: '36px', background: isDarkMode ? '#334155' : '#f1f5f9', borderRadius: '8px' }} />
             ) : (
-              <>
-                <div><span style={{ fontWeight: 600 }}>Unique Cards:</span> {entry?.unique_cards}</div>
-                <div><span style={{ fontWeight: 600 }}>Total Cards:</span> {entry?.total_cards}</div>
-              </>
+              /* Only render the visible in-row View Collection button on non-mobile viewports */
+              !isMobileViewport ? (
+                <button
+                  onClick={() => handleViewCollection(entry!.user_id, entry!.name)}
+                  className="view-btn"
+                  style={{
+                    padding: '10px 12px',
+                    background: '#3B4CCA',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#2E3A8A'
+                    e.currentTarget.style.transform = 'scale(1.03)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#3B4CCA'
+                    e.currentTarget.style.transform = 'scale(1)'
+                  }}
+                >
+                  View Collection
+                </button>
+              ) : null
             )}
           </div>
         </div>
-
-        <div>
-          {isPlaceholder ? (
-            <div style={{ width: '96px', height: '36px', background: isDarkMode ? '#334155' : '#f1f5f9', borderRadius: '8px' }} />
-          ) : (
-            <button
-              onClick={() => handleViewCollection(entry!.user_id, entry!.name)}
-              style={{
-                padding: '8px 16px',
-                background: '#3B4CCA',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                whiteSpace: 'nowrap'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#2E3A8A'
-                e.currentTarget.style.transform = 'scale(1.03)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#3B4CCA'
-                e.currentTarget.style.transform = 'scale(1)'
-              }}
-            >
-              View Collection
-            </button>
-          )}
-        </div>
-      </div>
+      </>
     )
   }
 
   return (
-    <div style={{
+    <div className="leaderboard-page" style={{
       minHeight: '100vh',
       background: 'transparent',
       padding: '40px 20px',
@@ -264,16 +303,15 @@ export default function LeaderboardPage() {
       justifyContent: 'center',
       alignItems: 'flex-start'
     }}>
-      {/* Main centered column that enforces a fixed visual size */}
-      <div style={{
-        width: '100%',
-        maxWidth: '1200px',
-        height: `${CONTAINER_HEIGHT_PX}px`,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-        minWidth: `${CARD_MIN_WIDTH_PX}px`
-      }}>
+      {/* Main centered column that is responsive */}
+  <div className="leaderboard-inner" style={{
+  width: '100%',
+  maxWidth: '100%',
+  minHeight: CONTAINER_MIN_HEIGHT,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '20px'
+  }}>
         {/* Header */}
         <div style={{ textAlign: 'center' }}>
           <h1 style={{
@@ -363,7 +401,7 @@ export default function LeaderboardPage() {
           </div>
 
           {/* Pagination sits at the bottom of the card so the card maintains consistent height */}
-          <div style={{
+          <div className="pagination-controls" style={{
             marginTop: '6px',
             display: 'flex',
             justifyContent: 'center',
@@ -371,10 +409,17 @@ export default function LeaderboardPage() {
             gap: '10px'
           }}>
             <button
+              className="prev-btn"
               onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage === 1}
               style={{
                 padding: '8px 14px',
+                width: '96px',
+                height: '40px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxSizing: 'border-box',
                 background: currentPage === 1 ? (isDarkMode ? '#334155' : '#cbd5e1') : (isDarkMode ? '#334155' : 'white'),
                 color: currentPage === 1 ? '#94a3b8' : (isDarkMode ? '#e5e7eb' : '#334155'),
                 border: 'none',
@@ -387,15 +432,22 @@ export default function LeaderboardPage() {
               ← Previous
             </button>
 
-            <div style={{ padding: '8px 14px', background: isDarkMode ? '#334155' : 'white', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 600, color: isDarkMode ? '#e5e7eb' : '#334155' }}>
+            <div className="page-indicator" style={{ padding: '8px 12px', flex: 1, minWidth: 0, height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', background: isDarkMode ? '#334155' : 'white', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 600, color: isDarkMode ? '#e5e7eb' : '#334155' }}>
               Page {currentPage} of {totalPages}
             </div>
 
             <button
+              className="next-btn"
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage === totalPages}
               style={{
                 padding: '8px 14px',
+                width: '96px',
+                height: '40px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxSizing: 'border-box',
                 background: currentPage === totalPages ? (isDarkMode ? '#334155' : '#cbd5e1') : (isDarkMode ? '#334155' : 'white'),
                 color: currentPage === totalPages ? '#94a3b8' : (isDarkMode ? '#e5e7eb' : '#334155'),
                 border: 'none',
@@ -411,10 +463,98 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
+      {/* Mobile-only styles */}
       <style jsx>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        /* Mobile-only overrides: keep desktop unchanged */
+        @media (max-width: 640px) {
+  .lb-row {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    gap: 8px !important;
+    padding: 14px !important;
+  }
+
+  .lb-rank {
+    font-size: 1.2rem !important;
+    min-width: unset !important;
+    margin-bottom: 4px !important;
+    text-align: center !important;
+  }
+
+  .lb-content {
+    width: 100% !important;
+  }
+
+  .lb-row > div:nth-child(2) {
+    width: 100% !important;
+    text-align: center !important;
+  }
+
+  .lb-row > div:nth-child(2) div {
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .btn-wrap {
+    width: 100% !important;
+    margin-top: 10px !important;
+    display: none !important; /* hide desktop button on mobile - clickable name will be used */
+    justify-content: center !important;
+  }
+  /* Hide the mobile button; the row itself is clickable on mobile instead of a separate button */
+  .mobile-btn-wrap { display: none !important; width: 100% !important; text-align: center !important; }
+  .view-btn-mobile {
+    display: inline-block !important;
+    width: 100% !important;
+    max-width: 420px !important;
+    padding: 10px 14px !important;
+    border-radius: 8px !important;
+    font-size: 0.95rem !important;
+    box-sizing: border-box !important;
+    white-space: nowrap !important;
+  }
+
+  .view-btn {
+    display: none !important; /* hide desktop view button on mobile */
+  }
+}
+
+
+        /* Pagination: prevent wrapping and shrink on very small screens so "Page X of Y" stays on one line */
+        .pagination-controls { gap: 10px; }
+        .pagination-controls .page-indicator,
+        .pagination-controls button { white-space: nowrap; }
+
+        @media (max-width: 480px) {
+          .pagination-controls .page-indicator {
+            font-size: 0.82rem !important;
+            padding: 6px 8px !important;
+            /* center takes remaining space on very small screens */
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          .pagination-controls button {
+            font-size: 0.82rem !important;
+            padding: 6px 8px !important;
+            width: 68px !important;
+          }
+        }
+
+        @media (min-width: 1024px) {
+          .leaderboard-inner {
+            /* Slightly larger than the original 1200px: use 1280px max width, keep a reasonable min-width */
+            max-width: 1280px !important;
+            min-width: 760px !important;
+            height: 700px !important;
+            margin: 0 auto !important;
+          }
         }
       `}</style>
     </div>

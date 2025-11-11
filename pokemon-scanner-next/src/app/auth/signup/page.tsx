@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
@@ -17,6 +17,11 @@ export default function SignupPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -78,16 +83,20 @@ export default function SignupPage() {
     }
   }
 
+  if (!mounted) {
+    return <div className="container" />
+  }
+
   if (success) {
     return (
-      <div className="view active" style={{ maxWidth: '500px', margin: '80px auto', padding: '40px', textAlign: 'center' }}>
+      <div className="view active auth-container-card" style={{ maxWidth: 500, margin: '80px auto', padding: 40, textAlign: 'center' }}>
         <div style={{ fontSize: '4rem', marginBottom: '20px' }}>🎉</div>
         <h1 style={{ marginBottom: '20px', color: '#10b981' }}>Welcome!</h1>
         <p style={{ fontSize: '1.1rem', color: '#64748b', marginBottom: '30px', lineHeight: '1.6' }}>
           Your account has been created successfully. Have fun building your deck!
         </p>
         <Link href="/auth/login">
-          <button className="control-button primary">
+          <button className="control-button primary auth-button">
             Go to Login
           </button>
         </Link>
@@ -96,26 +105,17 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="view active" style={{ maxWidth: '500px', margin: '80px auto', padding: '40px' }}>
-      <h1 style={{ textAlign: 'center', marginBottom: '30px' }}>Create Account</h1>
-      
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {error && (
-          <div style={{ 
-            padding: '15px', 
-            background: '#fee2e2', 
-            color: '#dc2626', 
-            borderRadius: '8px',
-            fontSize: '0.95rem'
-          }}>
-            {error}
-          </div>
-        )}
+    <div className="container">
+      <div className="view active auth-container-card" style={{ maxWidth: 500, margin: '80px auto', padding: 40 }}>
+        <h1 className="auth-title" style={{ textAlign: 'center', marginBottom: 30 }}>Create Account</h1>
+
+        <form onSubmit={handleSubmit} className="auth-form">
+          {error && (
+            <div className="auth-error">{error}</div>
+          )}
 
         <div>
-          <label htmlFor="name" style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>
-            Name
-          </label>
+          <label htmlFor="name" className="auth-label">Name</label>
           <input
             id="name"
             type="text"
@@ -124,19 +124,7 @@ export default function SignupPage() {
             required
             placeholder="Your name"
             maxLength={50}
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              fontSize: '1rem',
-              border: `2px solid ${isDarkMode ? '#475569' : '#e2e8f0'}`,
-              borderRadius: '8px',
-              outline: 'none',
-              transition: 'border-color 0.2s',
-              background: isDarkMode ? '#0b1220' : 'white',
-              color: isDarkMode ? '#e5e7eb' : 'inherit'
-            }}
-            onFocus={(e) => e.target.style.borderColor = isDarkMode ? '#06B6D4' : '#2563EB'}
-            onBlur={(e) => e.target.style.borderColor = isDarkMode ? '#475569' : '#e2e8f0'}
+            className="auth-input"
           />
           <div style={{ marginTop: '8px', fontSize: '0.85rem', color: isDarkMode ? '#94a3b8' : '#64748b' }}>
             Letters only, maximum 50 characters
@@ -144,9 +132,7 @@ export default function SignupPage() {
         </div>
 
         <div>
-          <label htmlFor="email" style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>
-            Email
-          </label>
+          <label htmlFor="email" className="auth-label">Email</label>
           <input
             id="email"
             type="email"
@@ -154,26 +140,12 @@ export default function SignupPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="your.email@example.com"
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              fontSize: '1rem',
-              border: `2px solid ${isDarkMode ? '#475569' : '#e2e8f0'}`,
-              borderRadius: '8px',
-              outline: 'none',
-              transition: 'border-color 0.2s',
-              background: isDarkMode ? '#0b1220' : 'white',
-              color: isDarkMode ? '#e5e7eb' : 'inherit'
-            }}
-            onFocus={(e) => e.target.style.borderColor = isDarkMode ? '#06B6D4' : '#2563EB'}
-            onBlur={(e) => e.target.style.borderColor = isDarkMode ? '#475569' : '#e2e8f0'}
+            className="auth-input"
           />
         </div>
 
         <div>
-          <label htmlFor="password" style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>
-            Password
-          </label>
+          <label htmlFor="password" className="auth-label">Password</label>
           <input
             id="password"
             type="password"
@@ -181,19 +153,7 @@ export default function SignupPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             placeholder="Create a strong password"
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              fontSize: '1rem',
-              border: `2px solid ${isDarkMode ? '#475569' : '#e2e8f0'}`,
-              borderRadius: '8px',
-              outline: 'none',
-              transition: 'border-color 0.2s',
-              background: isDarkMode ? '#0b1220' : 'white',
-              color: isDarkMode ? '#e5e7eb' : 'inherit'
-            }}
-            onFocus={(e) => e.target.style.borderColor = isDarkMode ? '#06B6D4' : '#2563EB'}
-            onBlur={(e) => e.target.style.borderColor = isDarkMode ? '#475569' : '#e2e8f0'}
+            className="auth-input"
           />
           <div style={{ marginTop: '8px', fontSize: '0.85rem', color: isDarkMode ? '#94a3b8' : '#64748b' }}>
             Must contain: one uppercase, one lowercase, and one number (minimum 6 characters)
@@ -201,9 +161,7 @@ export default function SignupPage() {
         </div>
 
         <div>
-          <label htmlFor="confirmPassword" style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>
-            Confirm Password
-          </label>
+          <label htmlFor="confirmPassword" className="auth-label">Confirm Password</label>
           <input
             id="confirmPassword"
             type="password"
@@ -211,54 +169,23 @@ export default function SignupPage() {
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
             placeholder="Re-enter your password"
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              fontSize: '1rem',
-              border: `2px solid ${isDarkMode ? '#475569' : '#e2e8f0'}`,
-              borderRadius: '8px',
-              outline: 'none',
-              transition: 'border-color 0.2s',
-              background: isDarkMode ? '#0b1220' : 'white',
-              color: isDarkMode ? '#e5e7eb' : 'inherit'
-            }}
-            onFocus={(e) => e.target.style.borderColor = isDarkMode ? '#06B6D4' : '#2563EB'}
-            onBlur={(e) => e.target.style.borderColor = isDarkMode ? '#475569' : '#e2e8f0'}
+            className="auth-input"
           />
         </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="control-button primary"
-          style={{
-            width: '100%',
-            padding: '14px',
-            fontSize: '1.1rem',
-            marginTop: '10px',
-            opacity: loading ? 0.6 : 1,
-            cursor: loading ? 'not-allowed' : 'pointer'
-          }}
-        >
-          {loading ? 'Creating account...' : 'Sign Up'}
-        </button>
-
-        <div style={{ 
-          textAlign: 'center', 
-          marginTop: '20px', 
-          paddingTop: '20px', 
-          borderTop: '1px solid #e2e8f0',
-          color: isDarkMode ? '#94a3b8' : '#64748b'
-        }}>
-          Already have an account?{' '}
-          <Link 
-            href="/auth/login" 
-            style={{ color: '#2563EB', textDecoration: 'none', fontWeight: '600' }}
+          <button
+            type="submit"
+            disabled={loading}
+            className="control-button primary auth-button"
           >
-            Login
-          </Link>
-        </div>
+            {loading ? 'Creating account...' : 'Sign Up'}
+          </button>
+
+          <div className="auth-divider" style={{ color: isDarkMode ? '#94a3b8' : '#64748b' }}>
+            Already have an account?{' '}
+            <Link href="/auth/login" style={{ color: '#2563EB', textDecoration: 'none', fontWeight: '600' }}>Login</Link>
+          </div>
       </form>
+      </div>
     </div>
   )
 }
