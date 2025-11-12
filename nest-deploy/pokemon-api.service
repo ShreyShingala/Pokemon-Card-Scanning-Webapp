@@ -8,7 +8,8 @@ WorkingDirectory=%h/Pokemon-Card-Scanning-Webapp
 EnvironmentFile=%h/Pokemon-Card-Scanning-Webapp/.env
 Environment="PORT=9573"
 Environment="PATH=%h/Pokemon-Card-Scanning-Webapp/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=%h/Pokemon-Card-Scanning-Webapp/venv/bin/uvicorn Image_detection.main:app --host 127.0.0.1 --port 9573
+ExecStart=%h/Pokemon-Card-Scanning-Webapp/venv/bin/uvicorn Image_detection.main:app \
+	--host 127.0.0.1 --port 9573 --workers 2 --loop uvloop --http httptools
 Restart=on-failure
 RestartSec=10
 TimeoutStopSec=120
