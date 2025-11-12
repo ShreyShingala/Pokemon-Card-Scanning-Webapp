@@ -1,13 +1,6 @@
 # ACTUAL API THAT WILL WORK WITH WEBAPP
 import os
 
-# Quick runtime workaround for macOS/Linux environments where multiple OpenMP
-# runtimes are linked (e.g. libomp from different libraries). Without this,
-# some builds will abort with "Initializing libomp.dylib, but found libomp.dylib
-# already initialized" causing the Python process to crash and client fetches
-# to fail. Setting KMP_DUPLICATE_LIB_OK allows the process to continue. This
-# is a tolerated workaround during development; for production you should
-# ensure a single OpenMP runtime is used.
 os.environ.setdefault('KMP_DUPLICATE_LIB_OK', 'TRUE')
 
 from fastapi import FastAPI, UploadFile, File
@@ -57,7 +50,7 @@ def convert_numpy_types(obj):
 async def read_image_from_upload(file: UploadFile): #read and turn an UploadFile into an OpenCV BGR image.
     image_data = await file.read()
 
-    # Try OpenCV first (works for JPEG/PNG/WebP if OpenCV built with codecs)
+    # Try OpenCV first
     try:
         np_array = np.frombuffer(image_data, np.uint8)
         image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
@@ -66,20 +59,15 @@ async def read_image_from_upload(file: UploadFile): #read and turn an UploadFile
     except Exception:
         image = None
 
-    # Try Pillow (broad format support). If the pillow-heif plugin is installed
-    # the Pillow opener will handle HEIC/HEIF files automatically. Attempt to
-    # register the pillow-heif opener if available so Image.open can read HEIC.
+    # Try Pillow
     try:
         try:
-            # Register pillow-heif as an opener so Pillow can open .heic/.heif
             import pillow_heif
             try:
                 pillow_heif.register_heif_opener()
             except Exception:
-                # If registration fails, proceed — Pillow may still open other formats
                 pass
         except Exception:
-            # pillow_heif not installed — we'll still try Pillow for JPEG/PNG/etc
             pass
 
         pil_img = Image.open(io.BytesIO(image_data)).convert('RGB')
