@@ -105,9 +105,6 @@ export default function LeaderboardPage() {
     return exScore * 100 + stageScore
   }
 
-  // NOTE: Viewing-specific collection sorting/modal logic was removed from the
-  // leaderboard page. The leaderboard now navigates to the public collection
-  // page at /collection/:userId which contains the full, read-only collection UI.
   useEffect(() => {
     const mql = window.matchMedia('(max-width: 640px)')
     const update = () => setIsMobileViewport(mql.matches)
