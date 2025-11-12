@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useToast } from '@/contexts/ToastContext'
 
 interface CardItem {
   id: string
@@ -47,6 +48,7 @@ export default function CollectionPage() {
   const router = useRouter()
   const {user, loading: authLoading} = useAuth()
   const { isDarkMode } = useTheme()
+  const { showToast } = useToast()
   const [collection, setCollection] = useState<CardItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -60,6 +62,7 @@ export default function CollectionPage() {
   const [togglingPublic, setTogglingPublic] = useState(false)
   const [deletePending, setDeletePending] = useState(false)
   const deleteTimeoutRef = useRef<number | null>(null)
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
   // scrollRef retained if needed for future small interactions; not required for fullscreen
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
@@ -135,6 +138,18 @@ export default function CollectionPage() {
     loadCollection()
     loadProfilePublicStatus()
   }, [user, authLoading, router])
+
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 768px)')
+    const update = () => setIsMobileViewport(mql.matches)
+    update()
+    if (mql.addEventListener) mql.addEventListener('change', update)
+    else mql.addListener(update)
+    return () => {
+      if (mql.removeEventListener) mql.removeEventListener('change', update)
+      else mql.removeListener(update)
+    }
+  }, [])
 
   // Reset delete confirmation when selected card changes or component unmounts
   useEffect(() => {
@@ -280,13 +295,13 @@ export default function CollectionPage() {
         // but inform the user that remote deletion did not complete.
         console.warn('Server responded with non-ok status when deleting card:', response.status)
         removeLocally()
-        alert('Card removed locally, but failed to delete on the server. It may reappear after a refresh if the server still has it.')
+        showToast('Card removed locally, but failed to delete on the server. It may reappear after a refresh if the server still has it.', 'error')
       }
     } catch (err) {
       console.error('Failed to delete card:', err)
       // Network error — remove locally so UX isn't blocked, but notify user
       removeLocally()
-      alert('Could not reach server to delete card. The card was removed locally and may still exist on the server.')
+      showToast('Could not reach server to delete card. The card was removed locally and may still exist on the server.', 'error')
     }
   }
 
@@ -621,13 +636,13 @@ export default function CollectionPage() {
                 const data = await resp.json()
                 if (data && data.new_is_public_status !== undefined) {
                   setIsPublic(!!data.new_is_public_status)
-                  alert(`Your collection is now ${data.new_is_public_status ? 'Public' : 'Private'}`)
+                  showToast(`Your collection is now ${data.new_is_public_status ? 'Public' : 'Private'}`, 'success')
                 } else {
-                  alert('Toggled privacy, but could not read new status')
+                  showToast('Toggled privacy, but could not read new status', 'info')
                 }
               } catch (e) {
                 console.error('Toggle public failed:', e)
-                alert((e as Error).message || 'Failed to toggle public/private')
+                showToast((e as Error).message || 'Failed to toggle public/private', 'error')
               } finally {
                 setTogglingPublic(false)
               }
@@ -658,10 +673,8 @@ export default function CollectionPage() {
         <>
           {/* Sorting Controls with Search */}
           <div className="sort-controls" style={{
-            display: 'flex',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '10px',
+            // On desktop keep the original flex layout; on mobile we render a block/grid inside
+            ...(isMobileViewport ? { display: 'block' } : { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }),
             maxWidth: '1400px',
             margin: '0 auto 20px auto',
             padding: '15px 20px',
@@ -670,117 +683,220 @@ export default function CollectionPage() {
             boxShadow: isDarkMode ? '0 2px 8px rgba(0, 0, 0, 0.3)' : '0 2px 8px rgba(0, 0, 0, 0.1)'
           }}>
             <span style={{ fontWeight: '600', color: isDarkMode ? '#cbd5e1' : '#334155', fontSize: '0.95rem', marginRight: '5px' }}>Sort:</span>
-            
-            {/* Sort Type Buttons */}
-            {[
-              { value: 'name', label: 'Name' },
-              { value: 'set', label: 'Set' },
-              { value: 'rarity', label: 'Rarity' },
-              { value: 'quantity', label: 'Qty' },
-              { value: 'hp', label: 'HP' },
-              { value: 'type', label: 'Type' },
-              { value: 'damage', label: 'Damage' },
-              { value: 'ability', label: 'Ability' },
-              { value: 'stage', label: 'Stage' },
-              { value: 'ex', label: 'EX' },
-              { value: 'family', label: 'Family' },
-              { value: 'pokedex', label: 'Pokedex' }
-            ].map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setSortBy(option.value as any)}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '0.9rem',
-                  fontWeight: '500',
-                  border: '2px solid',
-                  borderColor: sortBy === option.value ? (isDarkMode ? '#06B6D4' : '#2563EB') : (isDarkMode ? '#475569' : '#e2e8f0'),
-                  borderRadius: '6px',
-                  background: sortBy === option.value ? (isDarkMode ? '#2563EB' : '#2563EB') : (isDarkMode ? '#334155' : 'white'),
-                  color: sortBy === option.value ? 'white' : (isDarkMode ? '#e5e7eb' : '#334155'),
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  whiteSpace: 'nowrap'
-                }}
-                onMouseEnter={(e) => {
-                  if (sortBy !== option.value) {
-                    e.currentTarget.style.borderColor = isDarkMode ? '#06B6D4' : '#2563EB'
+
+            {isMobileViewport ? (
+              // Mobile: 3-column grid of sort buttons, then stacked sort-order + search below
+              <div style={{ width: '100%' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginTop: '10px' }}>
+                  {[
+                    { value: 'name', label: 'Name' },
+                    { value: 'set', label: 'Set' },
+                    { value: 'rarity', label: 'Rarity' },
+                    { value: 'quantity', label: 'Qty' },
+                    { value: 'hp', label: 'HP' },
+                    { value: 'type', label: 'Type' },
+                    { value: 'damage', label: 'Damage' },
+                    { value: 'ability', label: 'Ability' },
+                    { value: 'stage', label: 'Stage' },
+                    { value: 'ex', label: 'EX' },
+                    { value: 'family', label: 'Family' },
+                    { value: 'pokedex', label: 'Pokedex' }
+                  ].map((option) => {
+                    const isActive = sortBy === option.value
+                    const btnStyle: React.CSSProperties = {
+                      padding: '8px 10px',
+                      fontSize: '0.9rem',
+                      fontWeight: 500,
+                      border: '2px solid',
+                      borderColor: isActive ? (isDarkMode ? '#06B6D4' : '#2563EB') : (isDarkMode ? '#475569' : '#e2e8f0'),
+                      borderRadius: 6,
+                      background: isActive ? (isDarkMode ? '#2563EB' : '#2563EB') : (isDarkMode ? '#334155' : 'white'),
+                      color: isActive ? 'white' : (isDarkMode ? '#e5e7eb' : '#334155'),
+                      cursor: 'pointer',
+                      width: '100%',
+                      textAlign: 'center'
+                    }
+
+                    return (
+                      <button
+                        key={option.value}
+                        onClick={() => setSortBy(option.value as any)}
+                        style={btnStyle}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button
+                    onClick={toggleSortOrder}
+                    style={{
+                      padding: '10px 12px',
+                      fontSize: '1rem',
+                      border: `2px solid ${isDarkMode ? '#06B6D4' : '#2563EB'}`,
+                      borderRadius: '6px',
+                      background: isDarkMode ? '#334155' : 'white',
+                      color: isDarkMode ? '#06B6D4' : '#2563EB',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '100%'
+                    }}
+                    title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                  >
+                    {sortOrder === 'asc' ? 'Sort: Ascending ↑' : 'Sort: Descending ↓'}
+                  </button>
+
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      placeholder="Search..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        fontSize: '0.95rem',
+                        border: '2px solid',
+                        borderColor: isDarkMode ? '#475569' : '#e2e8f0',
+                        borderRadius: '6px',
+                        background: isDarkMode ? '#334155' : 'white',
+                        color: isDarkMode ? '#e5e7eb' : '#334155',
+                        outline: 'none'
+                      }}
+                    />
+                    {searchQuery && (
+                      <span style={{ fontSize: '0.85rem', color: '#334155', whiteSpace: 'nowrap' }}>
+                        {getSortedCollection().length} found
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // Desktop / larger view — keep original inline layout
+              <>
+                {/* Sort Type Buttons */}
+                {[
+                  { value: 'name', label: 'Name' },
+                  { value: 'set', label: 'Set' },
+                  { value: 'rarity', label: 'Rarity' },
+                  { value: 'quantity', label: 'Qty' },
+                  { value: 'hp', label: 'HP' },
+                  { value: 'type', label: 'Type' },
+                  { value: 'damage', label: 'Damage' },
+                  { value: 'ability', label: 'Ability' },
+                  { value: 'stage', label: 'Stage' },
+                  { value: 'ex', label: 'EX' },
+                  { value: 'family', label: 'Family' },
+                  { value: 'pokedex', label: 'Pokedex' }
+                ].map((option) => {
+                  const isActive = sortBy === option.value
+                  const baseStyle: React.CSSProperties = {
+                    padding: isMobileViewport ? '6px 10px' : '8px 16px',
+                    fontSize: '0.9rem',
+                    fontWeight: 500,
+                    border: '2px solid',
+                    borderColor: isActive ? (isDarkMode ? '#06B6D4' : '#2563EB') : (isDarkMode ? '#475569' : '#e2e8f0'),
+                    borderRadius: 6,
+                    background: isActive ? (isDarkMode ? '#2563EB' : '#2563EB') : (isDarkMode ? '#334155' : 'white'),
+                    color: isActive ? 'white' : (isDarkMode ? '#e5e7eb' : '#334155'),
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    whiteSpace: isMobileViewport ? 'normal' : 'nowrap'
+                  }
+
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => setSortBy(option.value as any)}
+                      style={baseStyle}
+                      onMouseEnter={(e) => {
+                        if (!isMobileViewport && !isActive) {
+                          e.currentTarget.style.borderColor = isDarkMode ? '#06B6D4' : '#2563EB'
+                          e.currentTarget.style.color = isDarkMode ? '#06B6D4' : '#2563EB'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isMobileViewport && !isActive) {
+                          e.currentTarget.style.borderColor = isDarkMode ? '#475569' : '#e2e8f0'
+                          e.currentTarget.style.color = isDarkMode ? '#e5e7eb' : '#334155'
+                        }
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  )
+                })}
+
+                {/* Sort Order Button */}
+                <button
+                  onClick={toggleSortOrder}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '1.1rem',
+                    border: `2px solid ${isDarkMode ? '#06B6D4' : '#2563EB'}`,
+                    borderRadius: '6px',
+                    background: isDarkMode ? '#334155' : 'white',
+                    color: isDarkMode ? '#06B6D4' : '#2563EB',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: '36px',
+                    height: '36px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = isDarkMode ? '#2563EB' : '#2563EB'
+                    e.currentTarget.style.color = 'white'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = isDarkMode ? '#334155' : 'white'
                     e.currentTarget.style.color = isDarkMode ? '#06B6D4' : '#2563EB'
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (sortBy !== option.value) {
-                    e.currentTarget.style.borderColor = isDarkMode ? '#475569' : '#e2e8f0'
-                    e.currentTarget.style.color = isDarkMode ? '#e5e7eb' : '#334155'
-                  }
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
+                  }}
+                  title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                >
+                  {sortOrder === 'asc' ? '↑' : '↓'}
+                </button>
 
-            {/* Sort Order Button */}
-            <button
-              onClick={toggleSortOrder}
-              style={{
-                padding: '8px 16px',
-                fontSize: '1.1rem',
-                border: `2px solid ${isDarkMode ? '#06B6D4' : '#2563EB'}`,
-                borderRadius: '6px',
-                background: isDarkMode ? '#334155' : 'white',
-                color: isDarkMode ? '#06B6D4' : '#2563EB',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: '36px',
-                height: '36px'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = isDarkMode ? '#2563EB' : '#2563EB'
-                e.currentTarget.style.color = 'white'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = isDarkMode ? '#334155' : 'white'
-                e.currentTarget.style.color = isDarkMode ? '#06B6D4' : '#2563EB'
-              }}
-              title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
-            >
-              {sortOrder === 'asc' ? '↑' : '↓'}
-            </button>
+                {/* Spacer to push search to the right */}
+                <div style={{ flex: 1 }} />
 
-            {/* Spacer to push search to the right */}
-            <div style={{ flex: 1 }} />
-
-            {/* Search Bar */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '250px' }}>
-              <input
-                type="text"
-                placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: '6px 12px',
-                  fontSize: '0.9rem',
-                  border: '2px solid',
-                  borderColor: isDarkMode ? '#475569' : '#e2e8f0',
-                  borderRadius: '6px',
-                  background: isDarkMode ? '#334155' : 'white',
-                  color: isDarkMode ? '#e5e7eb' : '#334155',
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
-                }}
-                onFocus={(e) => e.currentTarget.style.borderColor = '#2563EB'}
-                onBlur={(e) => e.currentTarget.style.borderColor = isDarkMode ? '#475569' : '#e2e8f0'}
-              />
-              {searchQuery && (
-                <span style={{ fontSize: '0.85rem', color: '#334155', whiteSpace: 'nowrap' }}>
-                  {getSortedCollection().length} found
-                </span>
-              )}
-            </div>
+                {/* Search Bar */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: '250px' }}>
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '6px 12px',
+                      fontSize: '0.9rem',
+                      border: '2px solid',
+                      borderColor: isDarkMode ? '#475569' : '#e2e8f0',
+                      borderRadius: '6px',
+                      background: isDarkMode ? '#334155' : 'white',
+                      color: isDarkMode ? '#e5e7eb' : '#334155',
+                      outline: 'none',
+                      transition: 'border-color 0.2s'
+                    }}
+                    onFocus={(e) => e.currentTarget.style.borderColor = '#2563EB'}
+                    onBlur={(e) => e.currentTarget.style.borderColor = isDarkMode ? '#475569' : '#e2e8f0'}
+                  />
+                  {searchQuery && (
+                    <span style={{ fontSize: '0.85rem', color: '#334155', whiteSpace: 'nowrap' }}>
+                      {getSortedCollection().length} found
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="collection-grid">
@@ -898,100 +1014,102 @@ export default function CollectionPage() {
           </div>
 
           {/* Mobile-only scroll wrapper and fullscreen control (JS handles fullscreen) */}
-          <div className="mobile-scroll-controls" style={{ position: 'relative' }}>
-            {/* Fullscreen control removed */}
+          {isMobileViewport && (
+            <div className="mobile-scroll-controls" style={{ position: 'relative' }}>
+              {/* Fullscreen control removed */}
 
-            <div ref={scrollRef} className="collection-scroll-wrapper">
-              <div className="collection-grid mobile-inner">
-                {getSortedCollection().map((item) => {
-                  const card = item.card_details
-                  const imageUrl = card.image_large || card.image_small || 'https://via.placeholder.com/250x350?text=No+Image'
-                  const bgColor = getTypeColor(card.types, card.name)
+              <div ref={scrollRef} className="collection-scroll-wrapper">
+                <div className="collection-grid mobile-inner">
+                  {getSortedCollection().map((item) => {
+                    const card = item.card_details
+                    const imageUrl = card.image_large || card.image_small || 'https://via.placeholder.com/250x350?text=No+Image'
+                    const bgColor = getTypeColor(card.types, card.name)
 
-                  return (
-                    <div 
-                      key={item.id} 
-                      className="card-item"
-                      onClick={() => setSelectedCard(item)}
-                      style={{ 
-                        background: bgColor,
-                        transition: 'all 0.3s ease',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {/* Card Name - Centered at top */}
-                      <div style={{
-                        textAlign: 'center',
-                        fontWeight: 'bold',
-                        fontSize: '1.15em',
-                        color: isDarkMode ? '#f1f5f9' : '#1e293b',
-                        marginBottom: '12px',
-                        padding: '0 5px',
-                        lineHeight: '1.3'
-                      }}>
-                        {card.name || 'Unknown Card'}
-                      </div>
-
-                      {/* Card Image */}
-                      <img 
-                        src={imageUrl} 
-                        alt={card.name}
-                        onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/250x350?text=No+Image' }}
-                        style={{
-                          width: '100%',
-                          borderRadius: '10px',
-                          marginBottom: '12px'
+                    return (
+                      <div 
+                        key={item.id} 
+                        className="card-item"
+                        onClick={() => setSelectedCard(item)}
+                        style={{ 
+                          background: bgColor,
+                          transition: 'all 0.3s ease',
+                          cursor: 'pointer'
                         }}
-                      />
+                      >
+                        {/* Card Name - Centered at top */}
+                        <div style={{
+                          textAlign: 'center',
+                          fontWeight: 'bold',
+                          fontSize: '1.15em',
+                          color: isDarkMode ? '#f1f5f9' : '#1e293b',
+                          marginBottom: '12px',
+                          padding: '0 5px',
+                          lineHeight: '1.3'
+                        }}>
+                          {card.name || 'Unknown Card'}
+                        </div>
 
-                      {/* Card Info - Compact at bottom */}
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '6px',
-                        fontSize: '0.9em',
-                        color: '#475569'
-                      }}>
-                        {card.set_name && (
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Set:</span>
-                            <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{card.set_name}</span>
-                          </div>
-                        )}
-                        {card.number && (
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Card #:</span>
-                            <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{card.number}</span>
-                          </div>
-                        )}
-                        { // Pokédex Numbers
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Pokédex #:</span>
-                          {(card as any).national_pokedex_numbers && (card as any).national_pokedex_numbers.length > 0 ? (
-                            <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{(card as any).national_pokedex_numbers.join(', ')}</span>
-                          ) : (
-                            <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{"N/A"}</span>
+                        {/* Card Image */}
+                        <img 
+                          src={imageUrl} 
+                          alt={card.name}
+                          onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/250x350?text=No+Image' }}
+                          style={{
+                            width: '100%',
+                            borderRadius: '10px',
+                            marginBottom: '12px'
+                          }}
+                        />
+
+                        {/* Card Info - Compact at bottom */}
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                          fontSize: '0.9em',
+                          color: '#475569'
+                        }}>
+                          {card.set_name && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Set:</span>
+                              <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{card.set_name}</span>
+                            </div>
                           )}
-                          </div>
-                        }
-                        {card.rarity && (
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Rarity:</span>
-                            <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{card.rarity}</span>
-                          </div>
-                        )}
-                      </div>
+                          {card.number && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Card #:</span>
+                              <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{card.number}</span>
+                            </div>
+                          )}
+                          { // Pokédex Numbers
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Pokédex #:</span>
+                            {(card as any).national_pokedex_numbers && (card as any).national_pokedex_numbers.length > 0 ? (
+                              <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{(card as any).national_pokedex_numbers.join(', ')}</span>
+                            ) : (
+                              <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{"N/A"}</span>
+                            )}
+                            </div>
+                          }
+                          {card.rarity && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontWeight: '600', color: isDarkMode ? '#e5e7eb' : '#334155' }}>Rarity:</span>
+                              <span style={{ color: isDarkMode ? '#e5e7eb' : '#334155' }}>{card.rarity}</span>
+                            </div>
+                          )}
+                        </div>
 
-                      {/* Quantity Badge */}
-                      <div className="card-quantity" style={{ marginTop: '12px' }}>
-                        Owned: {item.quantity}
+                        {/* Quantity Badge */}
+                        <div className="card-quantity" style={{ marginTop: '12px' }}>
+                          Owned: {item.quantity}
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </>
       )}
 
@@ -1000,39 +1118,60 @@ export default function CollectionPage() {
         <div className="modal-overlay" onClick={() => setSelectedCard(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             {/* Close Button */}
-            <button className="modal-close" onClick={() => setSelectedCard(null)}>×</button>
+            <button
+              className="modal-close"
+              onClick={() => setSelectedCard(null)}
+              style={{
+                background: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.95)',
+                color: isDarkMode ? '#ffffff' : '#334155',
+                border: 'none',
+                borderRadius: '50%',
+                width: '35px',
+                height: '35px',
+                fontSize: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                zIndex: 10,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                fontWeight: '700'
+              }}
+            >×</button>
 
-            {/* Left Side - Card Image */}
-            <div className="modal-left">
-              {selectedCard.card_details?.image_large ? (
-                <img 
-                  src={selectedCard.card_details.image_large} 
-                  alt={selectedCard.card_details.name}
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '550px',
+            {/* Left Side - Card Image (hide on mobile) */}
+            {!isMobileViewport && (
+              <div className="modal-left">
+                {selectedCard.card_details?.image_large ? (
+                  <img 
+                    src={selectedCard.card_details.image_large} 
+                    alt={selectedCard.card_details.name}
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '550px',
+                      borderRadius: '12px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    width: '100%',
+                    height: '400px',
+                    backgroundColor: '#e2e8f0',
                     borderRadius: '12px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
-                  }}
-                />
-              ) : (
-                <div style={{
-                  width: '100%',
-                  height: '400px',
-                  backgroundColor: '#e2e8f0',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#64748b'
-                }}>
-                  No Image Available
-                </div>
-              )}
-            </div>
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#64748b'
+                  }}>
+                    No Image Available
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Right Side - Card Details */}
-            <div className="modal-right">
+            <div className="modal-right" style={{ padding: isMobileViewport ? '20px' : undefined }}>
               {/* Card Name & HP */}
               <div style={{ marginBottom: '24px' }}>
                 <h2 style={{ 

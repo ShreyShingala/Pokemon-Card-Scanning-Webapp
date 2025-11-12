@@ -4,10 +4,12 @@ import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/contexts/ThemeContext'
 import CardScanner from '@/components/CardScanner'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function ScanPage() {
   const router = useRouter()
   const { isDarkMode } = useTheme()
+  const { showToast } = useToast()
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
@@ -54,7 +56,7 @@ export default function ScanPage() {
       }
     } catch (error) {
       console.error('Camera access error:', error)
-      alert('Could not access camera. Please grant camera permissions.')
+      showToast('Could not access camera. Please grant camera permissions.', 'error')
       router.push('/')
     }
   }
@@ -121,7 +123,7 @@ export default function ScanPage() {
       setIsScanning(true)
     } catch (error) {
       console.error('Capture error:', error)
-      alert((error as Error).message || 'Failed to capture image. Please try again.')
+      showToast((error as Error).message || 'Failed to capture image. Please try again.', 'error')
       startCamera()
     }
   }

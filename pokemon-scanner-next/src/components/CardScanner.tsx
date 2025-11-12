@@ -1,8 +1,9 @@
-'use client'
+"use client"
 
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useToast } from '@/contexts/ToastContext'
 
 type ViewType = 'confirmation' | 'error' | 'captured_image' | 'bounding_box' | 'cropped_image' | 'ocr_extracted'
 
@@ -53,6 +54,7 @@ interface CardScannerProps {
 export default function CardScanner({ onBack, imageBlob, showProcess }: CardScannerProps) {
   const { user } = useAuth()
   const { isDarkMode } = useTheme()
+  const { showToast } = useToast()
   const [currentView, setCurrentView] = useState<ViewType | 'loading'>('loading')
   const [currentMatches, setCurrentMatches] = useState<Match[]>([])
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
@@ -69,11 +71,11 @@ export default function CardScanner({ onBack, imageBlob, showProcess }: CardScan
   const processImage = async () => {
     try {
       setCurrentView('loading')
-      
+
       const formData = new FormData()
       formData.append('file', imageBlob, 'card.jpg')
 
-      let response;
+      let response
       if (showProcess) {
         response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/scan_card_extra_info/`, {
           method: 'POST',
@@ -87,31 +89,28 @@ export default function CardScanner({ onBack, imageBlob, showProcess }: CardScan
       }
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'API request failed')
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.error || 'API request failed')
       }
 
       const result = await response.json()
-      
+
       if (showProcess) {
         setCapturedImage(result.base_image)
         setBboxImage(result.bbox_image)
         setCroppedImage(result.cropped_image)
         setOcrImage(result.annotated_image)
-        
-        const cardInfo = result.card_info
-        const ocrTextFormatted = `Detected Card Information:
-            Name: ${cardInfo.name || 'Not detected'}
-            HP: ${cardInfo.hp || 'Not detected'}
-            Card Number: ${cardInfo.card_number || 'Not detected'}`
+
+        const cardInfo = result.card_info || {}
+        const ocrTextFormatted = `Detected Card Information:\nName: ${cardInfo.name || 'Not detected'}\nHP: ${cardInfo.hp || 'Not detected'}\nCard Number: ${cardInfo.card_number || 'Not detected'}`
         setOcrText(ocrTextFormatted)
-        
+
         const matches = result.top_matches || []
-        const filteredMatches = matches.filter((match: Match) => match.similarity > 0.70)
+        const filteredMatches = matches.filter((match: Match) => match.similarity > 0.7)
         setCurrentMatches(filteredMatches)
         setCurrentMatchIndex(0)
         setCurrentCardData({ card_data: result.card_data, top_matches: filteredMatches })
-        
+
         setCurrentProcessStep(0)
         setCurrentView('captured_image')
       } else {
@@ -125,16 +124,16 @@ export default function CardScanner({ onBack, imageBlob, showProcess }: CardScan
 
   const showConfirmation = (data: CardData) => {
     const matches = data.top_matches || []
-    const filteredMatches = matches.filter(match => match.similarity > 0.70)
-    
+    const filteredMatches = matches.filter(match => match.similarity > 0.7)
+
     setCurrentMatches(filteredMatches)
     setCurrentCardData(data)
-    
+
     if (filteredMatches.length === 0) {
       showError('No matches found for this card with sufficient confidence (>70%).')
       return
     }
-    
+
     displayCurrentMatch(0, filteredMatches, data)
   }
 
@@ -146,13 +145,13 @@ export default function CardScanner({ onBack, imageBlob, showProcess }: CardScan
       showError('No more matches available. Please try scanning again.')
       return
     }
-    
+
     setCurrentMatchIndex(matchIndex)
-    
+
     const match = matchesData[matchIndex]
     const filename = match.card_name
-    const parts = filename.split("_")
-    const cardNum = parts[parts.length - 1].replace(".jpg", "")
+    const parts = filename.split('_')
+    const cardNum = parts[parts.length - 1].replace('.jpg', '')
     const setName = parts[parts.length - 2]
     const cardId = `${setName}-${cardNum}`
 
@@ -165,24 +164,24 @@ export default function CardScanner({ onBack, imageBlob, showProcess }: CardScan
     } catch (err) {
       console.error('Error fetching card data:', err)
     }
-    
+
     setCurrentView('confirmation')
   }
 
   const confirmCard = async () => {
     // Check if user is logged in
     if (!user) {
-      alert('Please login to add cards to your collection')
+      showToast('Please login to add cards to your collection', 'info')
       return
     }
 
     const match = currentMatches[currentMatchIndex]
     const filename = match.card_name
-    const parts = filename.split("_")
-    const cardNum = parts[parts.length - 1].replace(".jpg", "")
+    const parts = filename.split('_')
+    const cardNum = parts[parts.length - 1].replace('.jpg', '')
     const setName = parts[parts.length - 2]
     const cardId = `${setName}-${cardNum}`
-    
+
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/add_to_collection/`, {
         method: 'POST',
@@ -195,38 +194,38 @@ export default function CardScanner({ onBack, imageBlob, showProcess }: CardScan
           quantity: 1
         })
       })
-      
+
       if (!response.ok) {
         throw new Error('Failed to add card to collection')
       }
-      
+
       const result = await response.json()
-      
+
       if (result.success) {
         const action = result.action === 'updated' ? 'updated' : 'added'
         const quantity = result.new_quantity || result.quantity
-        
-        alert(`Success!\n\nCard ${action} to your collection!\nYou now have ${quantity} of this card.`)
+
+        showToast(`Success!\n\nCard ${action} to your collection!\nYou now have ${quantity} of this card.`, 'success')
         onBack()
       } else {
         throw new Error(result.error || 'Unknown error')
       }
     } catch (error) {
       console.error('Upload error:', error)
-      alert(`Failed to add card to collection:\n${(error as Error).message}`)
+      showToast(`Failed to add card to collection:\n${(error as Error).message}`, 'error')
       onBack()
     }
   }
 
   const rejectCard = () => {
     const newIndex = currentMatchIndex + 1
-    
+
     if (newIndex >= currentMatches.length) {
-      alert('No more matches available.')
+      showToast('No more matches available. Please try scanning again.', 'info')
       onBack()
       return
     }
-    
+
     displayCurrentMatch(newIndex)
   }
 
@@ -238,7 +237,7 @@ export default function CardScanner({ onBack, imageBlob, showProcess }: CardScan
   const handleConfirm = () => {
     const nextStep = currentProcessStep + 1
     setCurrentProcessStep(nextStep)
-    
+
     if (nextStep < showProcessPath.length) {
       setCurrentView(showProcessPath[nextStep])
     } else {
@@ -379,12 +378,12 @@ export default function CardScanner({ onBack, imageBlob, showProcess }: CardScan
   if (currentView === 'confirmation') {
     const match = currentMatches[currentMatchIndex]
     const filename = match?.card_name || ''
-    const parts = filename.split("_")
-    const cardNum = parts[parts.length - 1]?.replace(".jpg", "") || ''
+    const parts = filename.split('_')
+    const cardNum = parts[parts.length - 1]?.replace('.jpg', '') || ''
     const setName = parts[parts.length - 2] || ''
 
     return (
-      <div className="view active" style={{ 
+      <div className="view active final-add-view" style={{ 
         maxWidth: '800px', 
         margin: '0 auto',
         width: '100%',
@@ -394,57 +393,61 @@ export default function CardScanner({ onBack, imageBlob, showProcess }: CardScan
         background: isDarkMode ? '#1e293b' : 'white'
       }}>
         <h2 style={{ color: isDarkMode ? '#f1f5f9' : '#1e293b' }}>Is this your card?</h2>
-        <div className="confirmation-container">
-          <div className="match-info">
-            <p><strong>Card {currentMatchIndex + 1} of {currentMatches.length}</strong></p>
-            <p className="similarity-score">Confidence: {((match?.similarity || 0) * 100).toFixed(2)}%</p>
-            {currentMatches.length > 1 && (
-              <p style={{ fontSize: '0.9rem', color: isDarkMode ? '#94a3b8' : '#64748b', marginTop: '5px' }}>
-                Reviewing Cards
-              </p>
-            )}
+        <div className="confirmation-container final-add">
+          <div className="final-add-content">
+            <div className="match-info">
+              <p><strong>Card {currentMatchIndex + 1} of {currentMatches.length}</strong></p>
+              <p className="similarity-score">Confidence: {((match?.similarity || 0) * 100).toFixed(2)}%</p>
+              {currentMatches.length > 1 && (
+                <p style={{ fontSize: '0.9rem', color: isDarkMode ? '#94a3b8' : '#64748b', marginTop: '5px' }}>
+                  Reviewing Cards
+                </p>
+              )}
+            </div>
+
+            <div className="card-image-container" style={{ 
+              maxHeight: '400px',
+              maxWidth: '300px',
+              margin: '0 auto',
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center',
+              background: 'transparent',
+              boxShadow: 'none',
+              overflow: 'visible'
+            }}>
+              <img 
+                src={currentCardData?.card_data?.image_large || 'https://via.placeholder.com/400x560?text=Loading...'}
+                alt={currentCardData?.card_data?.name || match?.card_name || 'Card'}
+                style={{ maxHeight: '400px', width: 'auto', objectFit: 'contain' }}
+              />
+            </div>
+
+            <div className="card-details" style={{ textAlign: 'center' }}>
+              <h3>{currentCardData?.card_data?.name || match?.card_name.replace(/_/g, ' ').replace('.jpg', '') || 'Unknown Card'}</h3>
+              <p>{setName} • #{cardNum}</p>
+            </div>
+
+            <div className="confirmation-buttons">
+              <button onClick={rejectCard} className="confirm-btn no-btn">
+                {currentMatchIndex + 1 < currentMatches.length ? 'Skip' : 'No'}
+              </button>
+              <button onClick={confirmCard} className="confirm-btn yes-btn">
+                {currentMatchIndex + 1 < currentMatches.length ? 'Add & Next' : 'Yes'}
+              </button>
+            </div>
           </div>
-          
-          <div className="card-image-container" style={{ 
-            maxHeight: '400px',
-            maxWidth: '300px',
-            margin: '0 auto',
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center',
-            background: 'transparent',
-            boxShadow: 'none',
-            overflow: 'visible'
-          }}>
-            <img 
-              src={currentCardData?.card_data?.image_large || 'https://via.placeholder.com/400x560?text=Loading...'}
-              alt={currentCardData?.card_data?.name || match?.card_name || 'Card'}
-              style={{ maxHeight: '400px', width: 'auto', objectFit: 'contain' }}
-            />
-          </div>
-          
-          <div className="card-details" style={{ textAlign: 'center' }}>
-            <h3>{currentCardData?.card_data?.name || match?.card_name.replace(/_/g, ' ').replace('.jpg', '') || 'Unknown Card'}</h3>
-            <p>{setName} • #{cardNum}</p>
-          </div>
-          
-          <div className="confirmation-buttons">
-            <button onClick={rejectCard} className="confirm-btn no-btn">
-              {currentMatchIndex + 1 < currentMatches.length ? 'Skip' : 'No'}
-            </button>
-            <button onClick={confirmCard} className="confirm-btn yes-btn">
-              {currentMatchIndex + 1 < currentMatches.length ? 'Add & Next' : 'Yes'}
-            </button>
-          </div>
-          
-          <div style={{ marginTop: '20px', textAlign: 'center' }}>
-            <button 
-              onClick={onBack} 
-              className="control-button cancel"
-              style={{ fontSize: '0.9em', padding: '8px 20px' }}
-            >
-              Stop & Return to Menu
-            </button>
+
+          <div className="final-add-footer">
+            <div style={{ textAlign: 'center' }}>
+              <button 
+                onClick={onBack} 
+                className="control-button cancel"
+                style={{ fontSize: '0.9em', padding: '8px 20px' }}
+              >
+                Stop & Return to Menu
+              </button>
+            </div>
           </div>
         </div>
       </div>

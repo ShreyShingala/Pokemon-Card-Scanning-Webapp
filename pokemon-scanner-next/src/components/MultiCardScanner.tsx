@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useToast } from '@/contexts/ToastContext'
 
 interface DetectedCard {
   card_number: number
@@ -50,6 +51,7 @@ interface MultiCardScannerProps {
 export default function MultiCardScanner({ onBack, imageBlob, showProcess }: MultiCardScannerProps) {
   const { user } = useAuth()
   const { isDarkMode } = useTheme()
+  const { showToast } = useToast()
   const [isScanning, setIsScanning] = useState(true)
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [error, setError] = useState<string>('')
@@ -63,11 +65,12 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
   const processImage = async () => {
     try {
       setIsScanning(true)
-      
+      const apiBase = (process.env.NEXT_PUBLIC_API_URL || '').replace('0.0.0.0', '127.0.0.1')
+
       const formData = new FormData()
       formData.append('file', imageBlob, 'cards.jpg')
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/scan_multiple_cards/`, {
+      const response = await fetch(`${apiBase}/scan_multiple_cards/`, {
         method: 'POST',
         body: formData
       })
@@ -100,7 +103,7 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
 
   const addCurrentCard = async () => {
     if (!user) {
-      alert('Please login to add cards to your collection')
+      showToast('Please login to add cards to your collection', 'info')
       return
     }
 
@@ -125,7 +128,9 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
     }
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/add_to_collection/`, {
+      const apiBase = (process.env.NEXT_PUBLIC_API_URL || '').replace('0.0.0.0', '127.0.0.1')
+
+      const response = await fetch(`${apiBase}/add_to_collection/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -165,7 +170,7 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
       }
     } catch (err) {
       console.error('Add card error:', err)
-      alert(`Failed to add card:\n${(err as Error).message}`)
+      showToast(`Failed to add card:\n${(err as Error).message}`, 'error')
     }
   }
 
@@ -209,7 +214,7 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
     const added = addedCards.size
     const skipped = skippedCards.size
     
-    alert(`Scanning Complete!\n\nAdded: ${added} cards\nSkipped: ${skipped} cards\nTotal detected: ${totalCards} cards`)
+    showToast(`Scanning Complete!\n\nAdded: ${added} cards\nSkipped: ${skipped} cards\nTotal detected: ${totalCards} cards`, 'info')
     onBack()
   }
 
@@ -280,79 +285,77 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
         margin: '0 auto'
       }}>
         <h2 style={{ textAlign: 'center', marginBottom: '10px', color: isDarkMode ? '#f1f5f9' : '#1e293b' }}>Detection Results</h2>
-        <p style={{ textAlign: 'center', color: isDarkMode ? '#94a3b8' : '#64748b', marginBottom: '30px' }}>
+        <p style={{ textAlign: 'center', color: isDarkMode ? '#94a3b8' : '#64748b', marginBottom: '12px' }}>
           Detected {scanResult.total_detected} card(s) • {scanResult.successfully_processed} processed successfully
         </p>
-        
-        {/* Detection Image with Bounding Boxes */}
-        <div style={{ maxWidth: '800px', margin: '0 auto 40px' }}>
-          <h3 style={{ marginBottom: '15px' }}>All Detected Cards</h3>
-          <img 
-            src={scanResult.detection_image} 
-            alt="Detection Results" 
-            style={{ 
-              width: '100%', 
-              borderRadius: '10px', 
-              boxShadow: '0 4px 6px rgba(0,0,0,0.1)' 
-            }} 
-          />
-        </div>
 
-        {/* Individual Cards */}
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <h3 style={{ marginBottom: '20px' }}>Individual Cards</h3>
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
-            gap: '20px',
-            marginBottom: '30px'
-          }}>
-            {scanResult.cards.map((card, idx) => (
-              <div 
-                key={idx}
-                style={{
-                  border: `1px solid ${isDarkMode ? '#334155' : '#e2e8f0'}`,
-                  borderRadius: '10px',
-                  padding: '15px',
-                  background: isDarkMode ? '#1e293b' : 'white',
-                  transition: 'all 0.3s'
-                }}
-              >
-                <div style={{ position: 'relative' }}>
-                  <img 
-                    src={card.cropped_image} 
-                    alt={`Card ${idx + 1}`}
-                    style={{ 
-                      width: '100%', 
-                      borderRadius: '8px',
-                      marginBottom: '10px'
-                    }}
-                  />
+        {/* Wrap everything that can overflow on small screens in a scrollable container */}
+        <div className="detection-results">
+          {/* Detection Image with Bounding Boxes */}
+          <div style={{ maxWidth: '800px', margin: '0 auto 20px' }}>
+            <h3 style={{ marginBottom: '12px' }}>All Detected Cards</h3>
+            <img 
+              src={scanResult.detection_image} 
+              alt="Detection Results" 
+              style={{ 
+                width: '100%', 
+                borderRadius: '10px', 
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)' 
+              }} 
+            />
+          </div>
+
+          {/* Individual Cards */}
+          <div style={{ maxWidth: '1200px', margin: '0 auto', paddingBottom: '12px' }}>
+            <h3 style={{ marginBottom: '16px' }}>Individual Cards</h3>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', 
+              gap: '16px',
+              marginBottom: '16px'
+            }}>
+              {scanResult.cards.map((card, idx) => (
+                <div 
+                  key={idx}
+                  style={{
+                    border: `1px solid ${isDarkMode ? '#334155' : '#e2e8f0'}`,
+                    borderRadius: '10px',
+                    padding: '12px',
+                    background: isDarkMode ? '#1e293b' : 'white',
+                    transition: 'all 0.3s'
+                  }}
+                >
+                  <div style={{ position: 'relative' }}>
+                    <img 
+                      src={card.cropped_image} 
+                      alt={`Card ${idx + 1}`}
+                      style={{ 
+                        width: '100%', 
+                        borderRadius: '8px',
+                        marginBottom: '8px'
+                      }}
+                    />
+                  </div>
+                  <p style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '6px' }}>
+                    Card #{idx + 1}
+                  </p>
+                  <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                    Detection: {(card.detection_confidence * 100).toFixed(1)}%
+                  </p>
+                  <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                    Match: {(card.similarity * 100).toFixed(1)}%
+                  </p>
                 </div>
-                <p style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '5px' }}>
-                  Card #{idx + 1}
-                </p>
-                <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                  Detection: {(card.detection_confidence * 100).toFixed(1)}%
-                </p>
-                <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                  Match: {(card.similarity * 100).toFixed(1)}%
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: '30px' }}>
-          <button onClick={onBack} className="control-button cancel"
-            style={{ marginRight: '10px' }}
-          >
+        <div className="detection-actions">
+          <button onClick={onBack} className="control-button cancel">
             Go Back
           </button>
-          <button 
-            onClick={startReviewing} 
-            className="control-button primary"
-          >
+          <button onClick={startReviewing} className="control-button primary">
             Review Cards One by One
           </button>
         </div>
@@ -385,7 +388,7 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
     const isProcessed = addedCards.has(currentCardIndex) || skippedCards.has(currentCardIndex)
 
     return (
-      <div className="view active" style={{ 
+      <div className="view active final-add-view" style={{ 
         maxWidth: '800px', 
         margin: '0 auto',
         width: '100%',
@@ -405,8 +408,9 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
           )}
         </div>
 
-        <div className="confirmation-container">
-          <div className="match-info" style={{ marginBottom: '5px' }}>
+        <div className="confirmation-container final-add">
+          <div className="final-add-content">
+            <div className="match-info" style={{ marginBottom: '5px' }}>
             <p style={{ fontSize: '0.8rem', marginBottom: '2px' }}><strong>Detection Confidence: {(card.detection_confidence * 100).toFixed(1)}%</strong></p>
             <p className="similarity-score" style={{ fontSize: '0.8rem', marginBottom: '2px' }}>Match Confidence: {(displayCard.similarity * 100).toFixed(2)}%</p>
             {totalVariants > 1 && (
@@ -429,9 +433,9 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
                 {addedCards.has(currentCardIndex) ? '✓ Already Added' : 'Skipped'}
               </p>
             )}
-          </div>
-          
-          <div className="card-image-container" style={{ 
+            </div>
+            
+            <div className="card-image-container" style={{ 
             maxHeight: '400px',
             maxWidth: '300px',
             margin: '0 auto',
@@ -447,9 +451,9 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
               alt={displayCard.card_data?.name || displayCard.card_name}
               style={{ maxHeight: '400px', width: 'auto', objectFit: 'contain' }}
             />
-          </div>
-          
-          <div className="card-details" style={{ textAlign: 'center', marginBottom: '2px' }}>
+            </div>
+            
+            <div className="card-details" style={{ textAlign: 'center', marginBottom: '2px' }}>
             <h3 style={{ fontSize: '1em', marginBottom: '1px' }}>{displayCard.card_data?.name || displayCard.card_name.replace(/_/g, ' ').replace('.jpg', '')}</h3>
             <p style={{ fontSize: '0.8rem', marginBottom: '1px' }}>{displayCard.set_name} • #{displayCard.card_number_in_set}</p>
             {displayCard.card_data?.hp && <p style={{ fontSize: '0.8rem', marginBottom: '1px' }}>HP: {displayCard.card_data.hp}</p>}
@@ -458,14 +462,14 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
                 {displayCard.card_data.types.join(', ')}
               </p>
             )}
-          </div>
-          
-          <div className="confirmation-buttons" style={{ 
-            display: 'flex', 
-            gap: '10px', 
-            justifyContent: 'center',
-            marginBottom: '8px'
-          }}>
+            </div>
+            
+            <div className="confirmation-buttons" style={{ 
+              display: 'flex', 
+              gap: '10px', 
+              justifyContent: 'center',
+              marginBottom: '8px'
+            }}>
             <button 
               onClick={skipCurrentCard} 
               className="confirm-btn no-btn"
@@ -482,48 +486,50 @@ export default function MultiCardScanner({ onBack, imageBlob, showProcess }: Mul
             >
               {addedCards.has(currentCardIndex) ? 'Added ✓' : 'Add to Collection'}
             </button>
+            </div>
+
+            {/* Navigation */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '8px' }}>
+              <button
+                onClick={() => setCurrentCardIndex(Math.max(0, currentCardIndex - 1))}
+                disabled={currentCardIndex === 0}
+                className="control-button"
+                style={{ 
+                  padding: '8px 16px',
+                  opacity: currentCardIndex === 0 ? 0.5 : 1
+                }}
+              >
+                ← Previous
+              </button>
+              <button
+                onClick={() => setCurrentCardIndex(Math.min(scanResult.cards.length - 1, currentCardIndex + 1))}
+                disabled={currentCardIndex === scanResult.cards.length - 1}
+                className="control-button"
+                style={{ 
+                  padding: '8px 16px',
+                  opacity: currentCardIndex === scanResult.cards.length - 1 ? 0.5 : 1
+                }}
+              >
+                Next →
+              </button>
+            </div>
           </div>
 
-          {/* Navigation */}
-          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '20px' }}>
-            <button
-              onClick={() => setCurrentCardIndex(Math.max(0, currentCardIndex - 1))}
-              disabled={currentCardIndex === 0}
-              className="control-button"
-              style={{ 
-                padding: '8px 16px',
-                opacity: currentCardIndex === 0 ? 0.5 : 1
-              }}
-            >
-              ← Previous
-            </button>
-            <button
-              onClick={() => setCurrentCardIndex(Math.min(scanResult.cards.length - 1, currentCardIndex + 1))}
-              disabled={currentCardIndex === scanResult.cards.length - 1}
-              className="control-button"
-              style={{ 
-                padding: '8px 16px',
-                opacity: currentCardIndex === scanResult.cards.length - 1 ? 0.5 : 1
-              }}
-            >
-              Next →
-            </button>
-          </div>
-          
-          <div style={{ textAlign: 'center' }}>
-            <button 
-              onClick={onBack} 
-              className="control-button cancel"
-              style={{ marginRight: '10px' }}
-            >
-              Cancel & Go Back
-            </button>
-            <button 
-              onClick={showSummary} 
-              className="control-button primary"
-            >
-              Finish & See Summary
-            </button>
+          <div className="final-add-footer">
+            <div className="detection-actions">
+              <button 
+                onClick={onBack} 
+                className="control-button cancel"
+              >
+                Cancel &amp; Go Back
+              </button>
+              <button 
+                onClick={showSummary} 
+                className="control-button primary"
+              >
+                Finish &amp; See Summary
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useToast } from '@/contexts/ToastContext'
 
 interface LeaderboardEntry {
   user_id: string
@@ -14,6 +15,7 @@ interface LeaderboardEntry {
 export default function LeaderboardPage() {
   const router = useRouter()
   const { isDarkMode } = useTheme()
+  const { showToast } = useToast()
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [filteredLeaderboard, setFilteredLeaderboard] = useState<LeaderboardEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -24,6 +26,88 @@ export default function LeaderboardPage() {
 
   // Track whether we're on a small/mobile viewport if so make it so clicking on name leads to profile viewing
   const [isMobileViewport, setIsMobileViewport] = useState(false)
+  // Sorting helpers (copied from collection page to keep parity)
+  const rarityTiers: { [key: string]: number } = {
+    'Common': 1,
+    'Uncommon': 2,
+    'Rare': 3,
+    'Rare ACE': 3,
+    'Rare Prime': 3,
+    'Promo': 3,
+    'Rare BREAK': 4,
+    'Rare Holo': 4,
+    'Rare Holo EX': 4,
+    'Rare Holo GX': 4,
+    'Rare Holo LV.X': 4,
+    'Rare Holo Star': 4,
+    'Rare Holo V': 4,
+    'Rare Holo VMAX': 4,
+    'Amazing Rare': 5,
+    'LEGEND': 5,
+    'Ultra Rare': 5,
+    'Rare Ultra': 5,
+    'Rare Prism Star': 5,
+    'Secret Rare': 6,
+    'Rare Secret': 6,
+    'Rare Rainbow': 6,
+    'Rare Shining': 6,
+    'Rare Shiny': 6,
+    'Rare Shiny GX': 6,
+    'Rare MEGA': 6,
+    'Illustration Rare': 7,
+    'Double Rare': 7
+  }
+
+  const stageTiers: { [key: string]: number } = {
+    'Baby': 0,
+    'Basic': 1,
+    'Stage 1': 2,
+    'Stage 2': 3,
+    'Level-Up': 4,
+    'Restored': 1,
+  }
+
+  const exTiers: { [key: string]: number } = {
+    'Baby': 0,
+    'Basic': 1,
+    'Stage 1': 2,
+    'Stage 2': 3,
+    'Level-Up': 4,
+    'Restored': 1,
+    'BREAK': 8,
+    'EX': 9,
+    'ex': 9,
+    'GX': 5,
+    'MEGA': 10,
+    'V': 6,
+    'VMAX': 7,
+    'LEGEND': 8,
+  }
+
+  const getFamilyKey = (card: any): number | string => {
+    const pokedexArr = card.national_pokedex_numbers || []
+    if (Array.isArray(pokedexArr) && pokedexArr.length > 0) {
+      return Number(pokedexArr[0]) || pokedexArr[0]
+    }
+    if (card.evolves_from) return (card.evolves_from as string).toLowerCase()
+    const name = (card.name || '').toString()
+    if (!name) return ''
+    const cleaned = name.replace(/\s+(EX|GX|MEGA|VMAX|VSTAR|V|LEGEND|BREAK|Prime|Star|Shining)\b/gi, '')
+    return cleaned.trim().toLowerCase()
+  }
+
+  const computeStageScore = (card: any): number => {
+    const subtypes = card.subtypes || []
+    let stageScore = 0
+    for (const s of subtypes) if (stageTiers[s]) stageScore = Math.max(stageScore, stageTiers[s])
+    let exScore = 0
+    for (const s of subtypes) if (exTiers[s]) exScore = Math.max(exScore, exTiers[s])
+    return exScore * 100 + stageScore
+  }
+
+  // NOTE: Viewing-specific collection sorting/modal logic was removed from the
+  // leaderboard page. The leaderboard now navigates to the public collection
+  // page at /collection/:userId which contains the full, read-only collection UI.
   useEffect(() => {
     const mql = window.matchMedia('(max-width: 640px)')
     const update = () => setIsMobileViewport(mql.matches)
@@ -82,20 +166,25 @@ export default function LeaderboardPage() {
       // Check if the user's collection is public
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/profile_status/${userId}`)
       if (!response.ok) {
-        alert('Unable to check collection visibility')
+        showToast('Unable to check collection visibility', 'error')
         return
       }
       const data = await response.json()
       if (!data.success || !data.is_public) {
-        alert(`${userName}'s collection is private`)
+        showToast(`${userName}'s collection is private`, 'info')
         return
       }
-      // If public, navigate to view collection
+
+      // If public, navigate to the public collection page instead of opening an in-page modal
       router.push(`/collection/${userId}?name=${encodeURIComponent(userName)}`)
     } catch (error) {
-      alert('Error checking collection visibility')
+      showToast('Error checking collection visibility', 'error')
     }
   }
+
+  // Viewing modal and delete helpers removed; the leaderboard navigates to the
+  // public collection page at /collection/:userId instead of rendering an
+  // in-page modal.
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil(filteredLeaderboard.length / itemsPerPage))
@@ -463,6 +552,8 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
+      {/* Viewing modal removed: navigation to /collection/:userId is used instead. */}
+
       {/* Mobile-only styles */}
       <style jsx>{`
         @keyframes spin {
@@ -524,7 +615,6 @@ export default function LeaderboardPage() {
     display: none !important; /* hide desktop view button on mobile */
   }
 }
-
 
         /* Pagination: prevent wrapping and shrink on very small screens so "Page X of Y" stays on one line */
         .pagination-controls { gap: 10px; }
