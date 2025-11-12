@@ -1,4 +1,15 @@
 # ACTUAL API THAT WILL WORK WITH WEBAPP
+import os
+
+# Quick runtime workaround for macOS/Linux environments where multiple OpenMP
+# runtimes are linked (e.g. libomp from different libraries). Without this,
+# some builds will abort with "Initializing libomp.dylib, but found libomp.dylib
+# already initialized" causing the Python process to crash and client fetches
+# to fail. Setting KMP_DUPLICATE_LIB_OK allows the process to continue. This
+# is a tolerated workaround during development; for production you should
+# ensure a single OpenMP runtime is used.
+os.environ.setdefault('KMP_DUPLICATE_LIB_OK', 'TRUE')
+
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -16,6 +27,9 @@ from datetime import datetime
 import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import traceback
+import io
+from PIL import Image
+
 
 load_dotenv()
 
@@ -38,6 +52,43 @@ def convert_numpy_types(obj):
     elif isinstance(obj, list):
         return [convert_numpy_types(item) for item in obj]
     return obj
+
+
+async def read_image_from_upload(file: UploadFile): #read and turn an UploadFile into an OpenCV BGR image.
+    image_data = await file.read()
+
+    # Try OpenCV first (works for JPEG/PNG/WebP if OpenCV built with codecs)
+    try:
+        np_array = np.frombuffer(image_data, np.uint8)
+        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
+        if image is not None:
+            return image, image_data
+    except Exception:
+        image = None
+
+    # Try Pillow (broad format support). If the pillow-heif plugin is installed
+    # the Pillow opener will handle HEIC/HEIF files automatically. Attempt to
+    # register the pillow-heif opener if available so Image.open can read HEIC.
+    try:
+        try:
+            # Register pillow-heif as an opener so Pillow can open .heic/.heif
+            import pillow_heif
+            try:
+                pillow_heif.register_heif_opener()
+            except Exception:
+                # If registration fails, proceed — Pillow may still open other formats
+                pass
+        except Exception:
+            # pillow_heif not installed — we'll still try Pillow for JPEG/PNG/etc
+            pass
+
+        pil_img = Image.open(io.BytesIO(image_data)).convert('RGB')
+        image = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+        return image, image_data
+    except Exception:
+        pass
+
+    return None, image_data
 
 # Add CORS middleware to allow requests
 app.add_middleware(
@@ -202,14 +253,12 @@ async def scan_card_extra_info(file: UploadFile = File(...)):
                 status_code=503
             )
         
-        #GET THE IMAGE
-        image_data = await file.read()
-        np_array = np.frombuffer(image_data, np.uint8)
-        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
-        
+        # GET THE IMAGE (supports HEIC/HEIF via Pillow/pyheif fallback)
+        image, _ = await read_image_from_upload(file)
+
         if image is None:
             return JSONResponse(
-                content={"error": "Invalid image file"},
+                content={"error": "Invalid or unsupported image file"},
                 status_code=400
             )
 
@@ -319,14 +368,11 @@ async def scan_card(file: UploadFile = File(...)):
                 status_code=503  # Service Unavailable
             )
         
-        #GET THE IMAGE
-        image_data = await file.read()
-        np_array = np.frombuffer(image_data, np.uint8)
-        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
-        
+        image, _ = await read_image_from_upload(file)
+
         if image is None:
             return JSONResponse(
-                content={"error": "Invalid image file"},
+                content={"error": "Invalid or unsupported image file"},
                 status_code=400
             )
 
@@ -422,14 +468,11 @@ async def scan_multiple_cards(file: UploadFile = File(...)):
                 status_code=503
             )
         
-        # GET THE IMAGE
-        image_data = await file.read()
-        np_array = np.frombuffer(image_data, np.uint8)
-        image = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
-        
+        image, _ = await read_image_from_upload(file)
+
         if image is None:
             return JSONResponse(
-                content={"error": "Invalid image file"},
+                content={"error": "Invalid or unsupported image file"},
                 status_code=400
             )
 

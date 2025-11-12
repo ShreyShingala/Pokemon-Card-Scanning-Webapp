@@ -4,6 +4,7 @@ import Sidebar from '@/components/Sidebar'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { Analytics } from '@vercel/analytics/next'
+import { ToastProvider } from '@/contexts/ToastContext'
 
 export const metadata: Metadata = {
   title: 'PokéScanner - Card Collection Manager',
@@ -20,10 +21,12 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <AuthProvider>
-            <Sidebar />
-            <main className="main-content">
-              {children}
-            </main>
+            <ToastProvider>
+              <Sidebar />
+              <main className="main-content">
+                {children}
+              </main>
+            </ToastProvider>
           </AuthProvider>
         </ThemeProvider>
         <Analytics />

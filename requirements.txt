@@ -28,3 +28,6 @@ faiss-cpu>=1.7.4  # Facebook AI Similarity Search (use faiss-gpu if you have CUD
 
 # HTTP & API Calls
 requests>=2.31.0
+ 
+# HEIC support (use pillow-heif which integrates with Pillow and is more portable)
+pillow-heif>=0.11.0
