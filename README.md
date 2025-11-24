@@ -2,6 +2,8 @@
 
 Demo: https://pokemon-card-scanning-webapp.vercel.app/
 
+Link to the collection of images: https://drive.google.com/drive/folders/1MwCMRrEN_vw53t0sZqYlTFMOYj2QhaP7
+
 ## Overview
 
 Super cool webapp to help manage your pokemon card collection online. Uses a YOLOv8 detector to scan for bounding boxes, then a mix of OCR and a CLIP+FAISS model to detect visual similarity and get the actual card. Next.js frontend so you can actually add to your collection, view the leaderboard, etc. 
