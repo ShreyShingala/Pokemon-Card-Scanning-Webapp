@@ -13,14 +13,13 @@ supabase>=2.0.0
 python-dotenv>=1.0.0
 
 # Computer Vision & Image Processing
-opencv-python>=4.8.0
+opencv-python-headless>=4.8.0  # Headless version (smaller, no GUI)
 Pillow>=10.0.0
 numpy>=1.24.0
 
 # Object Detection (YOLO)
 ultralytics>=8.0.0  # Includes YOLOv8
-torch>=2.0.0
-torchvision>=0.15.0
+# Note: torch and torchvision installed separately with CPU-only version
 
 # OCR (Optical Character Recognition)
 easyocr>=1.7.0
