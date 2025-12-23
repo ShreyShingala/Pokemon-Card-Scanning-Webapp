@@ -20,8 +20,9 @@ RUN pip install --no-cache-dir \
 
 # Pre-download CLIP model to bake it into the Docker image
 # This avoids downloading 338MB on every cold start
-RUN mkdir -p /root/.cache/clip && \
-    python -c "import clip; print('Downloading CLIP model...'); clip.load('ViT-B/32', device='cpu', download_root='/root/.cache/clip'); print('CLIP model cached successfully')"
+# Cache it in /app/.cache/clip to match runtime location
+RUN mkdir -p /app/.cache/clip && \
+    python -c "import clip; print('Downloading CLIP model...'); clip.load('ViT-B/32', device='cpu', download_root='/app/.cache/clip'); print('CLIP model cached successfully')"
 
 # Copy only necessary application files
 COPY Image_detection/ Image_detection/
