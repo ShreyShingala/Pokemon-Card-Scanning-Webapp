@@ -1,11 +1,7 @@
 build:
   - pip install -r requirements.txt
-  - mkdir -p /opt/render/project/src/clip_cache
-  - export TORCH_HOME=/opt/render/project/src/clip_cache && python -c "import clip; clip.load('ViT-B/32', device='cpu')"
+  - mkdir -p .clip_cache
+  - python -c "import os; import clip; os.makedirs('.clip_cache', exist_ok=True); clip.load('ViT-B/32', device='cpu', download_root='.clip_cache')"
 
 start:
-  - export TORCH_HOME=/opt/render/project/src/clip_cache && uvicorn Image_detection.main:app --host 0.0.0.0 --port $PORT
-
-envVars:
-  - key: TORCH_HOME
-    value: /opt/render/project/src/clip_cache
+  - uvicorn Image_detection.main:app --host 0.0.0.0 --port $PORT

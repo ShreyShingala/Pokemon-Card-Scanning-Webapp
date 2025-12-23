@@ -399,7 +399,9 @@ def initialize_clip_matcher(): #Lazy initialize CLIP, FAISS and mappings. Force 
 
         # Load CLIP model (force jit=False)
         try:
-            cache_dir = os.path.expanduser('~/.cache/clip')
+            # Use project-relative cache directory that persists on Render
+            cache_dir = os.path.join(project_root, '.clip_cache')
+            os.makedirs(cache_dir, exist_ok=True)
             cache_model = os.path.join(cache_dir, 'ViT-B-32.pt')
             print(f"[CLIP] Cache directory: {cache_dir}")
             print(f"[CLIP] Checking for cached model at: {cache_model}")
