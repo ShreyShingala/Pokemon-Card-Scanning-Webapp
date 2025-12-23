@@ -8,7 +8,7 @@ import numpy as np
 import os
 import json
 import uuid
-from scan_card import getbounding, crop_out_card, get_text_from_image, get_best_matched_clip, initialize_clip_matcher
+from .scan_card import getbounding, crop_out_card, get_text_from_image, get_best_matched_clip, initialize_clip_matcher
 import uvicorn
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -16,6 +16,9 @@ from datetime import datetime
 import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import traceback
+import io
+from PIL import Image
+import asyncio
 
 load_dotenv()
 
@@ -136,18 +139,48 @@ def add_card_to_user_collection(username: str, card_id: str, quantity: int = 1):
         print(f"Error adding card to user collection: {e}")
         return {"success": False, "error": str(e)}
 
-# Initialize CLIP matcher on startup
+# Global flag to track CLIP initialization
+_clip_initialized = False
+
+def init_clip_in_background():
+    """Initialize CLIP in a background thread"""
+    global _clip_initialized
+    print("[STARTUP] Background CLIP initialization starting...")
+    try:
+        success = initialize_clip_matcher()
+        if success:
+            _clip_initialized = True
+            print("[STARTUP] ✓ CLIP initialized successfully in background")
+        else:
+            print("[STARTUP] ✗ CLIP initialization failed")
+    except Exception as e:
+        print(f"[STARTUP] ✗ CLIP initialization error: {e}")
+        import traceback
+        traceback.print_exc()
+
+# Initialize CLIP matcher on startup (non-blocking)
 @app.on_event("startup")
 async def startup_event():
-    print("Initializing CLIP")
-    if initialize_clip_matcher():
-        print("CLIP ready")
-    else:
-        print("CLIP failed")
+    print("[STARTUP] ============================================")
+    print("[STARTUP] Pokemon Card Scanner API Starting")
+    print("[STARTUP] ============================================")
+    print(f"[STARTUP] Current working directory: {os.getcwd()}")
+    print(f"[STARTUP] Python version: {os.sys.version}")
+    
+    # Start CLIP initialization in background thread
+    loop = asyncio.get_running_loop()
+    loop.run_in_executor(None, init_clip_in_background)
+    print("[STARTUP] CLIP initialization started in background thread")
+    print("[STARTUP] API is ready to accept requests")
+    print("[STARTUP] ============================================")
 
 @app.get("/") #home page
 async def root(): #check if up
-    return {"status": "online", "service": "Pokemon Card Scanner API"}
+    return {
+        "status": "online", 
+        "service": "Pokemon Card Scanner API",
+        "clip_initialized": _clip_initialized
+    }
 
 @app.post("/scan_card_extra_info/") #Scan uploaded image and return extra info (for seeing the process work)
 async def scan_card_extra_info(file: UploadFile = File(...)):
@@ -587,7 +620,21 @@ async def add_to_collection(card_upload: CardUpload):
 @app.post("/add_user/")
 async def add_user(user_data: UserRegistration): #Add user to bookkeeping table
     try:
-        #we hash trust
+        # First check if user already exists
+        existing_user = supabase.table("users").select("id").eq("id", user_data.user_id).execute()
+        
+        if existing_user.data and len(existing_user.data) > 0:
+            # User already exists, return success
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "message": "User already exists in database",
+                    "existing": True
+                },
+                status_code=200
+            )
+        
+        # User doesn't exist, create new record
         user_record = {
             "id": user_data.user_id,
             "email": user_data.email,
@@ -602,7 +649,8 @@ async def add_user(user_data: UserRegistration): #Add user to bookkeeping table
             return JSONResponse(
                 content={
                     "success": True,
-                    "message": "User added to bookkeeping table"
+                    "message": "User added to bookkeeping table",
+                    "existing": False
                 },
                 status_code=200
             )
@@ -618,6 +666,7 @@ async def add_user(user_data: UserRegistration): #Add user to bookkeeping table
         traceback.print_exc()
         return JSONResponse(
             content={
+                "success": False,
                 "error": "Failed to add user to bookkeeping table",
                 "details": str(e)
             },
