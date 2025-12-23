@@ -195,29 +195,11 @@ _clip_initialized = False
 # Initialize CLIP matcher on startup (non-blocking)
 @app.on_event("startup")
 async def startup_event():
-    import asyncio
-    global _clip_initialized
-    
-    # Run CLIP initialization in background thread to not block startup
-    def init_clip_background():
-        global _clip_initialized
-        print("[STARTUP] Initializing CLIP in background...")
-        print(f"[STARTUP] Current working directory: {os.getcwd()}")
-        print(f"[STARTUP] Python version: {os.sys.version}")
-        
-        try:
-            if initialize_clip_matcher():
-                _clip_initialized = True
-                print("[STARTUP] ✓ CLIP initialization successful!")
-            else:
-                print("[STARTUP] ✗ CLIP initialization returned False")
-        except Exception as e:
-            print(f"[STARTUP] ✗ CLIP initialization exception: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    # Run in thread pool executor to not block event loop
-    loop = asyncio.get_event_loop()
+    # CLIP now loads lazily on first scan request instead of at startup
+    # This reduces memory usage on free hosting (512MB limit)
+    print("[STARTUP] App started - CLIP will initialize on first scan")
+    print(f"[STARTUP] Current working directory: {os.getcwd()}")
+    print(f"[STARTUP] Python version: {os.sys.version}")
     loop.run_in_executor(None, init_clip_background)
     print("[STARTUP] CLIP initialization task started in background")
 

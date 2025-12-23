@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+venv/
+.env
+.env.local
+
+# Node
+node_modules/
+.next/
+
+# IDE
+.vscode/
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+HEROKU_DEPLOYMENT.md
+CLIP_TROUBLESHOOTING.md
+CLIP_FIX_SUMMARY.md
+RENDER_DEPLOYMENT.md
+diagnose_clip.sh
+redeploy.sh
+render.yaml
+Dockerfile
+pokemon-api.service
+
+# Deployment configs
+nest-deploy/
