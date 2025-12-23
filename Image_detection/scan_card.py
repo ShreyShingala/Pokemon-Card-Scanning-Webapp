@@ -350,17 +350,32 @@ def initialize_clip_matcher(): #Lazy initialize CLIP, FAISS and mappings. Force 
     global _clip_model, _clip_preprocess, _faiss_index, _faiss_image_paths
 
     if _clip_model is not None:
+        print("[CLIP] Already initialized, skipping")
         return True
 
+    print("[CLIP] Starting initialization...")
+    
     # Paths to index/map built earlier
     project_root = os.path.join(os.path.dirname(__file__), '..')
     index_path = os.path.join(project_root, 'Training', 'training_card_identifier', 'clip_card_index.faiss')
     map_path = os.path.join(project_root, 'Training', 'training_card_identifier', 'clip_card_index_map.pkl')
 
+    print(f"[CLIP] Project root: {project_root}")
+    print(f"[CLIP] Looking for index at: {index_path}")
+    print(f"[CLIP] Looking for map at: {map_path}")
+    print(f"[CLIP] Index exists: {os.path.exists(index_path)}")
+    print(f"[CLIP] Map exists: {os.path.exists(map_path)}")
+    
     # Quick existence checks
-    if not os.path.exists(index_path) or not os.path.exists(map_path):
-        print(f"CLIP/FAISS index or map not found. Expected at:\n  {index_path}\n  {map_path}")
+    if not os.path.exists(index_path):
+        print(f"[CLIP] ✗ FAISS index not found at: {index_path}")
         return False
+    
+    if not os.path.exists(map_path):
+        print(f"[CLIP] ✗ Pickle map not found at: {map_path}")
+        return False
+    
+    print(f"[CLIP] ✓ Both index and map files found")
 
     # Some hacky force fixes
     os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
@@ -371,36 +386,55 @@ def initialize_clip_matcher(): #Lazy initialize CLIP, FAISS and mappings. Force 
 
     # Import torch/clip/faiss lazily
     try:
+        print("[CLIP] Importing dependencies...")
         # Force CPU to avoid MPS cause it causes issues
         torch.set_default_device('cpu')
         torch_device = 'cpu'
+        print(f"[CLIP] Using device: {torch_device}")
 
         import clip
         import faiss
         import pickle
+        print("[CLIP] ✓ Dependencies imported successfully")
 
         # Load CLIP model (force jit=False)
         try:
-            cache_model = os.path.expanduser('~/.cache/clip/ViT-B-32.pt')
+            cache_dir = os.path.expanduser('~/.cache/clip')
+            cache_model = os.path.join(cache_dir, 'ViT-B-32.pt')
+            print(f"[CLIP] Cache directory: {cache_dir}")
+            print(f"[CLIP] Checking for cached model at: {cache_model}")
+            
             if os.path.exists(cache_model):
-                print(f"Using cached CLIP model: {cache_model}")
+                print(f"[CLIP] ✓ Using cached CLIP model: {cache_model}")
             else:
-                print(f"CLIP model not cached - will download 338MB (may cause OOM on 512MB instances)")
-            _clip_model, _clip_preprocess = clip.load('ViT-B/32', device=torch_device, jit=False, download_root=os.path.expanduser('~/.cache/clip'))
+                print(f"[CLIP] ! Model not cached - downloading 338MB (may take time/cause OOM on small dynos)")
+            
+            print(f"[CLIP] Loading CLIP model...")
+            _clip_model, _clip_preprocess = clip.load('ViT-B/32', device=torch_device, jit=False, download_root=cache_dir)
+            print(f"[CLIP] ✓ CLIP model loaded successfully")
         except Exception as e:
-            print(f"Error loading CLIP model (likely OOM): {e}")
+            print(f"[CLIP] ✗ Error loading CLIP model: {e}")
+            import traceback
+            traceback.print_exc()
             raise
 
         # Load FAISS index and mapping
+        print(f"[CLIP] Loading FAISS index from: {index_path}")
         _faiss_index = faiss.read_index(index_path)
+        print(f"[CLIP] ✓ FAISS index loaded")
+        
+        print(f"[CLIP] Loading pickle map from: {map_path}")
         with open(map_path, 'rb') as f:
             _faiss_image_paths = pickle.load(f)
+        print(f"[CLIP] ✓ Pickle map loaded with {len(_faiss_image_paths)} entries")
 
-        print(f"CLIP + FAISS initialized: indexed {_faiss_index.ntotal} cards")
+        print(f"[CLIP] ✓✓✓ CLIP + FAISS fully initialized: indexed {_faiss_index.ntotal} cards")
         return True
 
     except Exception as e:
-        print(f"Failed to initialize CLIP matcher: {e}")
+        print(f"[CLIP] ✗✗✗ Failed to initialize CLIP matcher: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 

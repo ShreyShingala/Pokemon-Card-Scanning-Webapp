@@ -201,17 +201,25 @@ async def startup_event():
     # Run CLIP initialization in background thread to not block startup
     def init_clip_background():
         global _clip_initialized
-        print("Initializing CLIP in background...")
-        if initialize_clip_matcher():
-            _clip_initialized = True
-            print("CLIP ready")
-        else:
-            print("CLIP failed to initialize")
+        print("[STARTUP] Initializing CLIP in background...")
+        print(f"[STARTUP] Current working directory: {os.getcwd()}")
+        print(f"[STARTUP] Python version: {os.sys.version}")
+        
+        try:
+            if initialize_clip_matcher():
+                _clip_initialized = True
+                print("[STARTUP] ✓ CLIP initialization successful!")
+            else:
+                print("[STARTUP] ✗ CLIP initialization returned False")
+        except Exception as e:
+            print(f"[STARTUP] ✗ CLIP initialization exception: {e}")
+            import traceback
+            traceback.print_exc()
     
     # Run in thread pool executor to not block event loop
     loop = asyncio.get_event_loop()
     loop.run_in_executor(None, init_clip_background)
-    print("CLIP initialization started in background")
+    print("[STARTUP] CLIP initialization task started in background")
 
 @app.get("/") #home page
 async def root(): #check if up
@@ -226,6 +234,73 @@ async def health():
     return {
         "status": "healthy",
         "clip_ready": _clip_initialized
+    }
+
+@app.post("/init_clip") #Manual CLIP initialization endpoint for debugging
+async def manual_init_clip():
+    """Manually trigger CLIP initialization and return detailed status"""
+    global _clip_initialized
+    
+    if _clip_initialized:
+        return {
+            "status": "already_initialized",
+            "message": "CLIP is already initialized",
+            "clip_ready": True
+        }
+    
+    print("[MANUAL_INIT] Starting manual CLIP initialization...")
+    try:
+        success = initialize_clip_matcher()
+        if success:
+            _clip_initialized = True
+            return {
+                "status": "success",
+                "message": "CLIP initialized successfully",
+                "clip_ready": True
+            }
+        else:
+            return {
+                "status": "failed",
+                "message": "CLIP initialization returned False - check logs for details",
+                "clip_ready": False
+            }
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        return {
+            "status": "error",
+            "message": f"Exception during CLIP initialization: {str(e)}",
+            "traceback": error_trace,
+            "clip_ready": False
+        }
+
+@app.get("/debug/files") #Check if required files exist
+async def debug_files():
+    """Check if CLIP/FAISS files exist on the server"""
+    import os
+    project_root = os.path.join(os.path.dirname(__file__), '..')
+    
+    files_to_check = {
+        "index": os.path.join(project_root, 'Training', 'training_card_identifier', 'clip_card_index.faiss'),
+        "map": os.path.join(project_root, 'Training', 'training_card_identifier', 'clip_card_index_map.pkl'),
+        "yolo_model": os.path.join(project_root, 'detector_models', 'pokemon_detector4', 'weights', 'best.pt'),
+    }
+    
+    results = {}
+    for name, path in files_to_check.items():
+        exists = os.path.exists(path)
+        size = os.path.getsize(path) if exists else 0
+        results[name] = {
+            "path": path,
+            "exists": exists,
+            "size_mb": round(size / (1024 * 1024), 2) if exists else 0
+        }
+    
+    return {
+        "working_directory": os.getcwd(),
+        "project_root": project_root,
+        "files": results,
+        "clip_initialized": _clip_initialized
     }
 
 @app.post("/scan_card_extra_info/") #Scan uploaded image and return extra info (for seeing the process work)
