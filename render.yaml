@@ -1,7 +1,5 @@
 build:
   - pip install -r requirements.txt
-  - mkdir -p .clip_cache
-  - python -c "import os; import clip; os.makedirs('.clip_cache', exist_ok=True); clip.load('ViT-B/32', device='cpu', download_root='.clip_cache')"
 
 start:
   - uvicorn Image_detection.main:app --host 0.0.0.0 --port $PORT
