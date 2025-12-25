@@ -4,6 +4,8 @@ Demo: https://pokemon-card-scanning-webapp.vercel.app/
 
 Link to the collection of images: https://drive.google.com/drive/folders/1MwCMRrEN_vw53t0sZqYlTFMOYj2QhaP7
 
+Live API: https://huggingface.co/spaces/ShreyShingala/pokemon-scanner-api
+
 ## Overview
 
 Super cool webapp to help manage your pokemon card collection online. Uses a YOLOv8 detector to scan for bounding boxes, then a mix of OCR and a CLIP+FAISS model to detect visual similarity and get the actual card. Next.js frontend so you can actually add to your collection, view the leaderboard, etc. 
@@ -23,7 +25,7 @@ Key capabilities
 - `pokemon-scanner-next/` — Next.js frontend stuff
 - `detector_models/` - Where the actual models are located
 - `Database` - schema and original database population (~20k distinct pokemon cards in database)
-- `nest-deploy/` — Miscellaneous self hosting files ($0 cost to deploy)
+- `nest-deploy/` — Miscellaneous self hosting files ($0 cost to deploy when the server feels like working)
 
 ## How It Was Made
 
@@ -48,3 +50,9 @@ Webapp:
 5. CLIP embedding is searched against a FAISS index (nearest neighbors) and OCR provides a sanity check on candidate filenames.
 6. The API builds a combined result (detection crop, OCR text, top matches) and returns it to the frontend.
 7. Honestly could've just used the CLIP+FAISS model and it woudld've been so much faster, but this is cooler.
+
+## Backend Deployment
+
+The FastAPI backend is deployed on Hugging Face Spaces using Docker:
+
+- **Docker SDK**: Custom Dockerfile with Python 3.11, system dependencies (git, build-essential, OpenCV libs, libheif), and all Python packages
