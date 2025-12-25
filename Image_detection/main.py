@@ -14,7 +14,7 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 from datetime import datetime
 import base64
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import traceback
 import io
 from PIL import Image
@@ -42,6 +42,113 @@ class CardUpload(BaseModel):
     card_id: str
     username: str # user_id of individual
     quantity: int = 1
+
+# Module-level function for multiprocessing (must be picklable)
+def process_single_card_worker(args):
+    """Process a single card - module level function for ProcessPoolExecutor"""
+    idx, bbox_data, image_array = args
+    
+    # Initialize CLIP in each worker process
+    initialize_clip_matcher()
+    
+    bbox_norm = bbox_data['bbox_norm']
+    confidence = bbox_data['confidence']
+    card_num = idx + 1
+    
+    print(f"\nCard {card_num} (Confidence: {confidence:.1%})")
+    
+    try:
+        # Crop the card
+        card_image = crop_out_card(image_array, bbox_norm, save_path=None, debug=False)
+        
+        if card_image is None:
+            print(f"Failed to crop card {card_num}")
+            return {
+                "success": False,
+                "card_number": card_num,
+                "error": "Failed to crop card",
+                "confidence": confidence
+            }
+        
+        # Extract text with OCR
+        card_info = get_text_from_image(card_image, debug=False)
+        detected_name = card_info.get('name', 'Unknown')
+        print(f"OCR detected name: {detected_name}")
+        
+        # Find matches with CLIP
+        best, matches = get_best_matched_clip(card_image, top_k=5, show_image=False, ocr_name=detected_name)
+        
+        if not best:
+            print(f"No CLIP match found for card {card_num}")
+            return {
+                "success": False,
+                "card_number": card_num,
+                "error": "No visual match found",
+                "confidence": confidence,
+                "ocr_name": detected_name
+            }
+            
+        filename = best['card_name']
+        parts = filename.split("_")
+        card_number = parts[-1].replace(".jpg", "")
+        set_name = parts[-2]
+        card_id = f"{set_name}-{card_number}"
+        
+        print(f"Identified as: {card_id} (similarity: {best['similarity']:.4f})")
+        
+        # Fetch full card data from database
+        card_data = get_card_from_db(card_id)
+        
+        # Convert cropped card to base64 for response
+        _, cropped_encoded = cv2.imencode('.jpg', card_image)
+        cropped_base64 = base64.b64encode(cropped_encoded).decode('utf-8')
+        
+        # Build all match variants with full card data
+        all_match_variants = []
+        for m in matches[:10]:  # Get top 10 matches
+            variant_filename = m['card_name']
+            variant_parts = variant_filename.split("_")
+            variant_card_num = variant_parts[-1].replace(".jpg", "")
+            variant_set = variant_parts[-2]
+            variant_card_id = f"{variant_set}-{variant_card_num}"
+            
+            variant_card_data = get_card_from_db(variant_card_id)
+            
+            all_match_variants.append({
+                "rank": m['rank'],
+                "card_id": variant_card_id,
+                "card_name": m['card_name'],
+                "similarity": m['similarity'],
+                "set_name": variant_set,
+                "card_number_in_set": variant_card_num,
+                "card_data": variant_card_data
+            })
+        
+        return {
+            "success": True,
+            "card_number": card_num,
+            "detection_confidence": confidence,
+            "card_id": card_id,
+            "card_name": best['card_name'],
+            "similarity": best['similarity'],
+            "set_name": set_name,
+            "card_number_in_set": card_number,
+            "ocr_info": card_info,
+            "cropped_image": f"data:image/jpeg;base64,{cropped_base64}",
+            "bbox": bbox_norm,
+            "card_data": card_data,
+            "all_matches": all_match_variants
+        }
+        
+    except Exception as e:
+        print(f"Error processing card {card_num}: {e}")
+        traceback.print_exc()
+        return {
+            "success": False,
+            "card_number": card_num,
+            "error": str(e),
+            "confidence": confidence
+        }
 
 # User registration model
 class UserRegistration(BaseModel):
@@ -416,126 +523,24 @@ async def scan_multiple_cards(file: UploadFile = File(...)):
                 status_code=404
             )
         
-        print(f"\nProcessing {len(bbox_list)} cards in parallel")
+        print(f"\nProcessing {len(bbox_list)} cards with multiprocessing")
         
-        # Function to process a single card
-        def process_single_card(idx, bbox_data, image_copy):
-            # Need a copy of image to avoid threading issues
-            bbox_norm = bbox_data['bbox_norm']
-            confidence = bbox_data['confidence']
-            card_num = idx + 1
-            
-            print(f"\nCard {card_num}/{len(bbox_list)} (Confidence: {confidence:.1%})")
-            
-            try:
-                # Crop the card (use image_copy to avoid threading issues)
-                card_image = crop_out_card(image_copy, bbox_norm, save_path=None, debug=False)
-                
-                if card_image is None:
-                    print(f"Failed to crop card {card_num}")
-                    return {
-                        "success": False,
-                        "card_number": card_num,
-                        "error": "Failed to crop card",
-                        "confidence": confidence
-                    }
-                
-                # Extract text with OCR
-                card_info = get_text_from_image(card_image, debug=False)
-                detected_name = card_info.get('name', 'Unknown')
-                print(f"OCR detected name: {detected_name}")
-                
-                # Find matches with CLIP
-                best, matches = get_best_matched_clip(card_image, top_k=5, show_image=False, ocr_name=detected_name)
-                
-                if not best:
-                    print(f"No CLIP match found for card {card_num}")
-                    return {
-                        "success": False,
-                        "card_number": card_num,
-                        "error": "No visual match found",
-                        "confidence": confidence,
-                        "ocr_name": detected_name
-                    }
-                
-                filename = best['card_name']
-                parts = filename.split("_")
-                card_number = parts[-1].replace(".jpg", "")
-                set_name = parts[-2]
-                card_id = f"{set_name}-{card_number}"
-                
-                print(f"Identified as: {card_id} (similarity: {best['similarity']:.4f})")
-                
-                # Fetch full card data from database
-                card_data = get_card_from_db(card_id)
-                
-                # Convert cropped card to base64 for response
-                _, cropped_encoded = cv2.imencode('.jpg', card_image)
-                cropped_base64 = base64.b64encode(cropped_encoded).decode('utf-8')
-                
-                # Build all match variants with full card data
-                all_match_variants = []
-                for m in matches[:10]:  # Get top 10 matches to give user more options
-                    variant_filename = m['card_name']
-                    variant_parts = variant_filename.split("_")
-                    variant_card_num = variant_parts[-1].replace(".jpg", "")
-                    variant_set = variant_parts[-2]
-                    variant_card_id = f"{variant_set}-{variant_card_num}"
-                    
-                    # Fetch card data for this variant
-                    variant_card_data = get_card_from_db(variant_card_id)
-                    
-                    all_match_variants.append({
-                        "rank": m['rank'],
-                        "card_id": variant_card_id,
-                        "card_name": m['card_name'],
-                        "similarity": m['similarity'],
-                        "set_name": variant_set,
-                        "card_number_in_set": variant_card_num,
-                        "card_data": variant_card_data
-                    })
-                
-                return {
-                    "success": True,
-                    "card_number": card_num,
-                    "detection_confidence": confidence,
-                    "card_id": card_id,
-                    "card_name": best['card_name'],
-                    "similarity": best['similarity'],
-                    "set_name": set_name,
-                    "card_number_in_set": card_number,
-                    "ocr_info": card_info,
-                    "cropped_image": f"data:image/jpeg;base64,{cropped_base64}",
-                    "bbox": bbox_norm,
-                    "card_data": card_data,
-                    "all_matches": all_match_variants
-                }
-                
-            except Exception as e:
-                print(f"Error processing card {card_num}: {e}")
-                traceback.print_exc()
-                return {
-                    "success": False,
-                    "card_number": card_num,
-                    "error": str(e),
-                    "confidence": confidence
-                }
-        
-        # Process cards in parallel using ThreadPoolExecutor
+        # Process cards in parallel using ProcessPoolExecutor (2 workers for prod)
         processed_cards = []
         failed_cards = []
         
-        # Use max 10 worker, hopefully this runs fine
-        max_workers = min(10, len(bbox_list))
+        # Use 2 workers to match production 2 vCPU deployment
+        max_workers = 2
         
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_idx = {
-                executor.submit(process_single_card, idx, bbox_data, image): idx 
-                for idx, bbox_data in enumerate(bbox_list)
-            }
+        # Prepare arguments for worker processes
+        worker_args = [(idx, bbox_data, image.copy()) for idx, bbox_data in enumerate(bbox_list)]
+        
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            futures = [executor.submit(process_single_card_worker, args) for args in worker_args]
             
             # Collect results as they complete
-            for future in as_completed(future_to_idx):
+            for future in as_completed(futures):
                 result = future.result()
                 
                 if result["success"]:
@@ -551,7 +556,7 @@ async def scan_multiple_cards(file: UploadFile = File(...)):
         processed_cards.sort(key=lambda x: x["card_number"])
         failed_cards.sort(key=lambda x: x["card_number"])
         
-        print(f"\nALL THREADS COMPLETED")
+        print(f"\nALL PROCESSES COMPLETED")
         print(f"{len(processed_cards)} successful, {len(failed_cards)} failed")
         
         # Convert bbox image with all detections to base64
