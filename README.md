@@ -2,6 +2,8 @@
 
 Demo: https://pokemon-card-scanning-webapp.vercel.app/
 
+Video demo: https://www.youtube.com/watch?v=83ed0eN-RR0
+
 Link to the collection of images: https://drive.google.com/drive/folders/1MwCMRrEN_vw53t0sZqYlTFMOYj2QhaP7
 
 Live API: https://huggingface.co/spaces/ShreyShingala/pokemon-scanner-api
